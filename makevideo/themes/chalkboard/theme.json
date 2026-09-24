@@ -1,0 +1,64 @@
+{
+  "name": "chalkboard",
+  "version": 1,
+  "source": "original/canvas-design",
+  "desc": "黑板手写：墨绿板面、粉笔白字、粉笔黄强调，楷体手写气质",
+  "palette": {
+    "primary": "#F2C94C",
+    "primaryDark": "#D9B23A",
+    "primaryLight": "#F7DE8A",
+    "accent": "#F2C94C",
+    "accentSoft": "#FFF3C4",
+    "surface": "#2E5D3E",
+    "surfaceCard": "#356A49",
+    "surfaceAlt": "#274D35",
+    "ink": "#F5F1E6",
+    "inkMuted": "#B8C4B0",
+    "onPrimary": "#1F3F2B"
+  },
+  "semantic": {
+    "success": "#8FD694",
+    "info": "#8FC7E8",
+    "warning": "#F2C94C",
+    "highlightRow": "rgba(242,201,76,0.28)",
+    "terminalBg": "#142018",
+    "terminalFg": "#D7E4D0"
+  },
+  "typography": {
+    "body": "\"KaiTi\", \"STKaiti\", \"楷体\", \"Microsoft YaHei\", serif",
+    "mono": "\"Cascadia Code\", Consolas, monospace",
+    "display": 116,
+    "title": 90,
+    "header": 52,
+    "h1": 44,
+    "h2": 38,
+    "body": 36,
+    "caption": 30,
+    "micro": 26
+  },
+  "motion": {
+    "entranceSpring": {"damping": 110, "stiffness": 80},
+    "stagger": 12,
+    "tableRowDelay": 8,
+    "fadeFrames": 14
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 156,
+    "contentBottom": 150,
+    "headerHeight": 112,
+    "footerHeight": 58,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1480,
+    "radius": 10
+  },
+  "brand": {
+    "coverBg": "linear-gradient(180deg, #24492F 0%, #2E5D3E 55%, #275036 100%)",
+    "headerBg": "linear-gradient(90deg, #1F3F2B, #2A5439)",
+    "footerBg": "linear-gradient(90deg, #1F3F2B, #2A5439)",
+    "contentBg": "radial-gradient(circle at 20% 15%, rgba(255,255,255,0.05), transparent 45%), radial-gradient(circle at 85% 85%, rgba(255,255,255,0.04), transparent 40%), linear-gradient(180deg, #2E5D3E 0%, #2A5539 100%)",
+    "subtitleBg": "rgba(0,0,0,0.45)",
+    "subtitleColor": "#FFF9E6",
+    "serialLabel": "板书课堂"
+  }
+}

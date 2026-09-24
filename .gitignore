@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+
+# Node / Remotion
+node_modules/
+makevideo/engine/node_modules/
+
+# 渲染与拼接产物
+makevideo/engine/out/
+
+# 配音缓存（TTS 可重建）
+makevideo/engine/public/audio/
+
+# 试帧输出
+makevideo/preview/
+
+# 管线生成物（build 时自动重写）
+makevideo/engine/*.gen.json
+projects/*/gen/

@@ -1,0 +1,64 @@
+{
+  "name": "govgold",
+  "version": 1,
+  "source": "original/canvas-design",
+  "desc": "政务红金：庄重红金对撞，金线为骨，米白为底",
+  "palette": {
+    "primary": "#8C1F28",
+    "primaryDark": "#5A121A",
+    "primaryLight": "#A8323C",
+    "accent": "#C9A063",
+    "accentSoft": "#F5D9A8",
+    "surface": "#FAF6EF",
+    "surfaceCard": "#FFFFFF",
+    "surfaceAlt": "#F6F1E7",
+    "ink": "#2B2B2B",
+    "inkMuted": "#8A7B6A",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#1E7B34",
+    "info": "#2B6CB0",
+    "warning": "#B7791F",
+    "highlightRow": "#C6EFCE",
+    "terminalBg": "#1A1A2E",
+    "terminalFg": "#EAEAEA"
+  },
+  "typography": {
+    "body": "\"Microsoft YaHei\", \"PingFang SC\", \"SimHei\", sans-serif",
+    "mono": "Consolas, \"Courier New\", monospace",
+    "display": 110,
+    "title": 88,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "body": 34,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {"damping": 120, "stiffness": 100},
+    "stagger": 10,
+    "tableRowDelay": 7,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 90,
+    "contentTop": 150,
+    "contentBottom": 150,
+    "headerHeight": 110,
+    "footerHeight": 56,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 16
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 38%, rgba(201,160,99,0.18), transparent 55%), linear-gradient(135deg, #5A121A 0%, #8C1F28 60%, #A8323C 100%)",
+    "headerBg": "linear-gradient(90deg, #5A121A, #8C1F28)",
+    "footerBg": "linear-gradient(90deg, #5A121A, #8C1F28)",
+    "contentBg": "radial-gradient(circle at 88% 12%, rgba(201,160,99,0.16), transparent 42%), radial-gradient(circle at 8% 92%, rgba(140,31,40,0.07), transparent 45%), #FAF6EF",
+    "subtitleBg": "rgba(20,20,20,0.62)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "数据分析微课"
+  }
+}

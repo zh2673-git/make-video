@@ -1,0 +1,64 @@
+{
+  "name": "magazine",
+  "version": 1,
+  "source": "ported/awesome-design-md:linear-magazine-minimal",
+  "desc": "极简杂志：黑白灰为骨、Linear 索单点强调、大留白细字距（移植型）",
+  "palette": {
+    "primary": "#111111",
+    "primaryDark": "#000000",
+    "primaryLight": "#333333",
+    "accent": "#5E6AD2",
+    "accentSoft": "#E6E8F5",
+    "surface": "#FFFFFF",
+    "surfaceCard": "#FFFFFF",
+    "surfaceAlt": "#F7F7F8",
+    "ink": "#111111",
+    "inkMuted": "#6B6F76",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#0E9F6E",
+    "info": "#5E6AD2",
+    "warning": "#D97706",
+    "highlightRow": "#EEF0FF",
+    "terminalBg": "#111111",
+    "terminalFg": "#F5F5F5"
+  },
+  "typography": {
+    "body": "\"Segoe UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif",
+    "mono": "\"JetBrains Mono\", Consolas, monospace",
+    "display": 120,
+    "title": 92,
+    "header": 48,
+    "h1": 42,
+    "h2": 36,
+    "body": 34,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {"damping": 200, "stiffness": 120},
+    "stagger": 8,
+    "tableRowDelay": 5,
+    "fadeFrames": 10
+  },
+  "layout": {
+    "safeX": 110,
+    "contentTop": 150,
+    "contentBottom": 140,
+    "headerHeight": 100,
+    "footerHeight": 50,
+    "subtitleBottom": 80,
+    "subtitleMaxWidth": 1460,
+    "radius": 12
+  },
+  "brand": {
+    "coverBg": "linear-gradient(180deg, #FFFFFF 0%, #F2F2F4 100%)",
+    "headerBg": "linear-gradient(90deg, #111111, #222222)",
+    "footerBg": "linear-gradient(90deg, #111111, #222222)",
+    "contentBg": "radial-gradient(circle at 90% 8%, rgba(94,106,210,0.06), transparent 40%), #FFFFFF",
+    "subtitleBg": "rgba(17,17,17,0.72)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "极简微课"
+  }
+}
