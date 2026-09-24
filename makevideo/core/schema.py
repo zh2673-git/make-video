@@ -35,7 +35,7 @@ THEME_CONTRACT = {
                 "surface", "surfaceCard", "surfaceAlt", "ink", "inkMuted", "onPrimary"],
     "semantic": ["success", "info", "warning", "highlightRow", "terminalBg", "terminalFg"],
     "typography": ["body", "mono",
-                   "display", "title", "header", "h1", "h2", "body", "caption", "micro"],
+                   "display", "title", "header", "h1", "h2", "bodySize", "caption", "micro"],
     "motion": ["entranceSpring", "stagger", "tableRowDelay", "fadeFrames"],
     "layout": ["safeX", "contentTop", "contentBottom", "headerHeight", "footerHeight",
                "subtitleBottom", "subtitleMaxWidth", "radius"],
@@ -45,6 +45,10 @@ THEME_CONTRACT = {
 
 # 主题元信息段（非 token，不参与校验、不告警）
 THEME_META_SECTIONS = {"name", "version", "source", "desc"}
+
+# 动效变体池（可选段：缺省=组件默认动效，向后兼容旧主题）
+# 形态：{版式: ["变体A", "变体B", ...]}，组件按同版式出现序号轮换（相邻不重复）
+THEME_VARIANT_TYPES = {"bullets", "flow", "table", "quote", "compare", "timeline"}
 
 # 字段别名校验用：这些键只允许以字符串出现
 _STR_FIELDS = {"id", "type", "title", "narration", "highlight", "note", "quote",
@@ -94,10 +98,21 @@ def validate_theme(theme: dict, name: str = "?") -> None:
         for k in keys:
             if k not in seg:
                 errs.append(f"[{section}] 缺少键 '{k}'")
-    known = set(THEME_CONTRACT) | THEME_META_SECTIONS
+    known = set(THEME_CONTRACT) | THEME_META_SECTIONS | {"variants"}
     for section in theme:
         if section not in known:
             warns.append(f"未知段落 [{section}]（忽略）")
+    if "variants" in theme:  # 可选段：结构错了要拦（防笔误静默失效），缺省不告警
+        v = theme["variants"]
+        if not isinstance(v, dict):
+            errs.append("[variants] 应为对象（{版式: [变体名, ...]}）")
+        else:
+            for k, pool in v.items():
+                if k not in THEME_VARIANT_TYPES:
+                    errs.append(f"[variants] 版式 '{k}' 不在 {sorted(THEME_VARIANT_TYPES)}")
+                elif not (isinstance(pool, list) and pool and all(isinstance(x, str) and x for x in pool)
+                          and len(pool) <= 4):
+                    errs.append(f"[variants] {k} 应为 1~4 个非空字符串的数组")
     if warns:
         print(f"[THEME][{name}] 告警: " + "; ".join(warns))
     if errs:

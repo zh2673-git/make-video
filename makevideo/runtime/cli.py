@@ -11,7 +11,7 @@
 import argparse
 import sys
 
-from makevideo.application.pipeline import build, preview_theme, validate_project
+from makevideo.application.pipeline import build, compose_script, preview_theme, validate_project
 from makevideo.core.errors import MakeVideoError
 from makevideo.infrastructure.themeio import list_themes
 
@@ -34,6 +34,11 @@ def main(argv=None) -> int:
     pv = sub.add_parser("validate", help="校验工程（DSL+主题），不出片")
     pv.add_argument("project", help="工程目录")
 
+    pc = sub.add_parser("compose", help="纯文本讲稿 → 自动分镜讲稿.md（草稿，微调后 build）")
+    pc.add_argument("input", help="纯文本讲稿文件（.txt/.md，不含 SCENE 块）")
+    pc.add_argument("-o", "--out", help="输出路径（默认 <input>_分镜.md）")
+    pc.add_argument("--dry-run", action="store_true", help="仅打印分镜决策，不写文件")
+
     sub.add_parser("list-themes", help="列出主题库")
 
     a = p.parse_args(argv)
@@ -47,6 +52,8 @@ def main(argv=None) -> int:
         elif a.cmd == "validate":
             info = validate_project(a.project)
             print(f"[VALID] {info}")
+        elif a.cmd == "compose":
+            compose_script(a.input, out_path=a.out, dry_run=a.dry_run)
         elif a.cmd == "list-themes":
             themes = list_themes()
             print("\n".join(themes) if themes else "(主题库为空)")

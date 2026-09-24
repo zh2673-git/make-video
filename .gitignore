@@ -18,3 +18,8 @@ makevideo/preview/
 # 管线生成物（build 时自动重写）
 makevideo/engine/*.gen.json
 projects/*/gen/
+
+# engine src 下的 gen 产物（build 时自动重写）
+makevideo/engine/src/meta.gen.json
+makevideo/engine/src/scenes.gen.json
+makevideo/engine/src/theme.gen.json

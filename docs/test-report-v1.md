@@ -73,3 +73,54 @@
 ## 六、结论
 
 P/Q/I 全部通过。工具已具备「讲稿进、成片出」的端到端能力：管线回归零偏差，增量渲染只重渲改动分镜，换主题风格即时切换且时长不变。示例工程《makevideo 使用指南》（9 镜 2.6 分钟，techdark）作为 README 演示片交付。
+
+## 七、v0.0.2 增量验证（2026-09-25）
+
+两个新能力：**自动分镜 compose** + **动效变体池 variants**。
+
+### Q5 compose 自动分镜正确性
+
+覆盖全部规则的 10 段测试文本（临时工程，验证后已清理）：
+
+| 输入内容形态 | 自动判定 | 判定依据 |
+|---|---|---|
+| 首段「MakeVideo 自动分镜演示」 | title | 首段→片头 |
+| 两句介绍段 | bullets ×2 | 短句切分 |
+| 「三个核心问题」+ 3 条短句 | bullets ×3 | 短句切分（总起行提为标题） |
+| 首先/然后/最后 | flow ×3 | 步骤词×3 |
+| 4 条「名称：数值」 | chart | 数值名值对×4 |
+| 4 条「2024年3月 …」 | timeline ×4 | 时间标记×4 |
+| 引语 + 破折号出处 | quote + attribution | 引语/短句收束 |
+| import/def 代码行 | code（lang=python） | 代码行×2 |
+| 「……感谢观看。」 | ending | 收束语→片尾 |
+
+- 产物讲稿.md 经 parse_script 回读 + validate_scenes 复验通过（round-trip 自证）；`--dry-run` 输出逐镜决策表（版式+依据）。
+- 显式 A vs B + 对照行 ≥2 的 compare、`|` 表格行 table 分支由规则链单元覆盖（代码审读级），演示文本未含。
+
+### Q6 动效变体池生效性
+
+同 6 型分镜（bullets/flow/table/quote/compare/timeline）× 两套 variants 顺序（techdark 原序 vs 池反转临时主题），渲染各分镜 **frame 18**（入场动画进行中）单帧 PNG，PIL 全图逐像素对比：
+
+| 版式 | 差异像素占比 | 判定 |
+|---|---|---|
+| bullets（slide↔rise） | 5.64% | DIFF |
+| flow（scale↔rise） | 8.22% | DIFF |
+| table（cascade↔fade） | 31.68% | DIFF |
+| quote（mark↔rise） | 2.58% | DIFF |
+| compare（slide↔fade） | 58.29% | DIFF |
+| timeline（line↔pulse） | 1.25% | DIFF |
+
+6/6 版式变体差异显著 → 轮换真实生效。
+
+### I 增量（v0.0.2 追加）
+
+| 不变量 | 结果 | 说明 |
+|---|---|---|
+| 旧主题零改动兼容 | ✅ | 5 主题 theme.json 补 variants 后 load_theme 全过；variants 为可选段，缺省=默认动效 |
+| occurrence 0 = 默认动效 | ✅ | 示例工程 `--no-tts` 全 9 镜重渲：总时长 155.0s、4651 帧与 v0.0.1 完全一致，画面序列不变 |
+| tsc 类型检查 | ✅ | `npx tsc --noEmit` 全绿；顺带修复存量隐患 typography.body 重复声明（`--fs-body` 把字体栈当字号，字幕字号静默失效）→ 新增独立 token `bodySize` |
+
+### v0.0.2 已知限制
+
+1. **分段缓存无主题/变体维度**（沿承已知限制 1）：变体生效后同 id 段的画面随主题 variants 变化，`--only` 复用旧段不会自动重渲；当前以删除被污染段兜底。
+2. compare 分支要求显式「A vs B / A 与 B 的对比」标记且能切出 ≥2 对照行，条件较严——不足时兜底 bullets（人审可改）。

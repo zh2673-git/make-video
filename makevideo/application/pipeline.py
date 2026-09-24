@@ -6,9 +6,12 @@ init=解析+校验 → start=TTS+对齐 → stop=数量断言 → destroy=渲染
 """
 import json
 import os
+import re
 
 from makevideo.core.errors import ProjectError, TtsCountError
 from makevideo.core.schema import validate_scenes
+from makevideo.domain.composer import compose_script as compose_draft
+from makevideo.domain.composer import render_markdown
 from makevideo.domain.parser import parse_script
 from makevideo.domain.timeline import FPS, TAIL_FRAMES, align_timeline
 from makevideo.infrastructure import renderer, tts
@@ -124,6 +127,28 @@ def validate_project(project_dir: str) -> dict:
     load_theme(cfg["theme"])
     return {"project": cfg["name"], "theme": cfg["theme"], "scenes": len(scenes),
             "types": sorted({s["type"] for s in scenes})}
+
+
+def compose_script(input_path: str, out_path: str | None = None, dry_run: bool = False) -> dict:
+    """纯文本讲稿 → 自动分镜讲稿.md（草稿）。生成即校验，落盘后回读复验（round-trip 自证）。"""
+    try:
+        text = open(input_path, encoding="utf-8").read()
+    except OSError as e:
+        raise ProjectError(f"输入文本不可读: {input_path} ({e})")
+    if "## SCENE" in text:
+        raise ProjectError("输入已含 SCENE 分镜块：该讲稿已有版式声明，直接 build 即可")
+    scenes = compose_draft(text)
+    validate_scenes(scenes)  # 生成即校验：草稿保证 E2 干净
+    out_path = out_path or re.sub(r"\.(txt|md)$", "", input_path) + "_分镜.md"
+    if not dry_run:
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(render_markdown(scenes))
+        _, reread = parse_script(out_path)  # round-trip：产物必须能被 parser 原样解析
+        validate_scenes(reread)
+    print(f"[COMPOSE] {len(scenes)} 镜（" + ("dry-run 预览" if dry_run else f"-> {out_path}") + "）")
+    for s in scenes:
+        print(f"  {s['id']}  {s['type']:<9} {s.get('why', ''):<24} | {s['title'][:20]}")
+    return {"scenes": len(scenes), "out": None if dry_run else out_path}
 
 
 def preview_theme(theme_name: str, out_dir: str | None = None) -> list:

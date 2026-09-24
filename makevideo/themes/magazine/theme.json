@@ -25,19 +25,22 @@
     "terminalFg": "#F5F5F5"
   },
   "typography": {
-    "body": "\"Segoe UI\", \"Microsoft YaHei\", \"PingFang SC\", sans-serif",
+    "body": 34,
     "mono": "\"JetBrains Mono\", Consolas, monospace",
     "display": 120,
     "title": 92,
     "header": 48,
     "h1": 42,
     "h2": 36,
-    "body": 34,
     "caption": 28,
-    "micro": 24
+    "micro": 24,
+    "bodySize": 32
   },
   "motion": {
-    "entranceSpring": {"damping": 200, "stiffness": 120},
+    "entranceSpring": {
+      "damping": 200,
+      "stiffness": 120
+    },
     "stagger": 8,
     "tableRowDelay": 5,
     "fadeFrames": 10
@@ -60,5 +63,31 @@
     "subtitleBg": "rgba(17,17,17,0.72)",
     "subtitleColor": "#FFFFFF",
     "serialLabel": "极简微课"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "fade"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
   }
 }

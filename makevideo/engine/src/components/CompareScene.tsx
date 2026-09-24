@@ -1,4 +1,5 @@
 // [画面组件] CompareScene —— 左右对比（leftTitle/rightTitle；条目 "左|右" 或 pairs 表行）
+// 动效变体：slide=左右滑入（默认）/ fade=左列→右列先后淡入
 import React from 'react';
 import {spring, useCurrentFrame, useVideoConfig} from 'remotion';
 import type {ProjectMeta, Scene} from '../SceneTypes';
@@ -11,19 +12,24 @@ const splitPair = (s: string): [string, string] => {
   return [s.slice(0, idx).trim(), s.slice(idx + 1).trim()];
 };
 
-export const CompareScene: React.FC<{scene: Scene; meta: ProjectMeta}> = ({scene, meta}) => {
+export const CompareScene: React.FC<{scene: Scene; meta: ProjectMeta; variant?: string}> = ({scene, meta, variant = 'slide'}) => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
   const pairs: [string, string][] = scene.pairs
     ? (scene.pairs as string[][]).map((r) => [r[0] ?? '', r[1] ?? ''])
     : (scene.bullets ?? []).map(splitPair);
   const pop = spring({frame: frame - 10, fps, config: theme.motion.entranceSpring});
-  const col = (title: string | undefined, side: 0 | 1, accent: string) => (
+  const fadeL = spring({frame: frame - 12, fps, config: theme.motion.entranceSpring});
+  const fadeR = spring({frame: frame - 22, fps, config: theme.motion.entranceSpring});
+  const col = (title: string | undefined, side: 0 | 1, accent: string) => {
+    const colPop = variant === 'fade' ? (side === 0 ? fadeL : fadeR) : pop;
+    return (
     <div
       style={{
         flex: 1, background: 'var(--c-surface-card)', borderRadius: 'var(--radius)',
         border: `3px solid ${accent}`, padding: '30px 34px',
-        transform: `translateX(${side === 0 ? (1 - pop) * -60 : (1 - pop) * 60}px)`,
+        transform: variant === 'fade' ? 'none' : `translateX(${side === 0 ? (1 - pop) * -60 : (1 - pop) * 60}px)`,
+        opacity: colPop,
         boxShadow: '0 8px 24px rgba(0,0,0,0.10)',
       }}
     >
@@ -43,7 +49,8 @@ export const CompareScene: React.FC<{scene: Scene; meta: ProjectMeta}> = ({scene
         </div>
       ))}
     </div>
-  );
+    );
+  };
   return (
     <Shell scene={scene} meta={meta}>
       <div style={{display: 'flex', gap: 34, alignItems: 'stretch', height: '100%', padding: '20px 0'}}>

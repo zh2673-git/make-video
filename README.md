@@ -7,8 +7,10 @@
 ## 特性
 
 - **讲稿进、成片出**：配音、帧对齐、渲染、拼接全链路自动化，人只负责写讲稿。
+- **自动分镜**：`compose` 分析纯文本讲稿的内容形态（数据/步骤/对比/引语…），自动产出带版式声明的讲稿草稿。
 - **12 种分镜版式**：title / bullets / flow / table / panorama / ending / quote / compare / timeline / chart / code / image。
 - **主题系统**：视觉风格沉淀为 theme.json token，组件零硬编码风格，换主题即换风格、内容零改动。
+- **动效变体池**：6 个常用版式各配入场动效池，按分镜顺序轮换、相邻不重复，消除机械感。
 - **增量渲染**：`--only` 只重画改动的分镜，其余片段缓存复用，无损拼接。
 - **词级时间戳对齐**：TTS 词级时间戳驱动帧数换算与字幕帧窗，音画逐句对齐。
 
@@ -101,11 +103,34 @@ note: 表格下方的备注
 
 meta 可写在讲稿内嵌注释或 project.json（后者优先）：`voice` / `rate` / `unit` / `author` / `compliance` / `footer`。
 
+## 自动分镜（compose）
+
+手头只有纯文本讲稿？`compose` 按**内容形态**自动选择版式，产出带版式声明的讲稿草稿，微调后 `build`：
+
+```
+python -m makevideo compose 讲稿.txt            # 产出 讲稿_分镜.md
+python -m makevideo compose 讲稿.txt --dry-run  # 仅预览分镜决策（版式 + 判定依据）
+```
+
+| 内容形态 | 判定依据 | 版式 |
+|---|---|---|
+| 首段 / 收束语 | 首段；谢谢/感谢/下期开头 | title / ending |
+| 表格行 | `\|` 分隔行（>12 行升全景） | table / panorama |
+| 数据名值对 | ≥3 条「名称：数值」 | chart |
+| 时间序列 | 年份/月份/阶段标记 ≥3 | timeline |
+| 左右对照 | 「A vs B」且对照行 ≥2 | compare |
+| 步骤叙述 | 首先/然后/最后、编号条目 | flow |
+| 引语金句 | 引号包裹、破折号出处、单句收束 | quote |
+| 要点/默认兜底 | 列表行、短句切分 | bullets |
+
+所有条目逐字取自原文，不增写内容；产出即校验（DSL round-trip），AI 判断在先、确定性执行在后、人审兜底。
+
 ## CLI 命令
 
 ```
 python -m makevideo build <工程目录> [--only 03,05] [--no-tts] [--no-render] [--theme 主题名]
-python -m makevideo preview --theme <主题名>     # 固定样例分镜渲染试帧 PNG
+python -m makevideo compose <文本文件> [-o 输出.md] [--dry-run]   # 纯文本 → 自动分镜讲稿草稿
+python -m makevideo preview <主题名>             # 固定样例分镜渲染试帧 PNG
 python -m makevideo validate <工程目录>          # 仅校验讲稿 DSL + 主题 token
 python -m makevideo list-themes                  # 列出可用主题
 ```
@@ -120,11 +145,13 @@ python -m makevideo list-themes                  # 列出可用主题
 
 预置主题：govgold（政务红金）、chalkboard（黑板手写）、magazine（极简杂志）、techdark（科技暗色）、warmedu（暖色教育）。新增主题只需两份文件：`styles/<名>/DESIGN.md` + `themes/<名>/theme.json`。
 
+**动效变体池**（可选段 `variants`）：6 个常用版式（bullets / flow / table / quote / compare / timeline）各配入场动效池，组件按同版式出现序号轮换、相邻分镜不重复——同一条片里每次出现的版式动效不再雷同。缺省该段即用各版式默认动效，旧主题零改动兼容；变体仅动效维度，布局与色彩 token 不变。
+
 ## 演示视频
 
 **《makevideo 使用指南》**（2.6 分钟，techdark 主题）——本 README 的动态版说明书，由 `projects/makevideo-使用指南/` 讲稿一键生成，也是"以工具介绍工具"的端到端示例：修改该工程的讲稿后重跑 build，即可体验完整出片流程。
 
-![《makevideo 使用指南》](assets/demo.mp4)
+▶ [观看《makevideo 使用指南》演示视频（2.6 分钟）](assets/demo.mp4)
 
 ## 设计文档
 

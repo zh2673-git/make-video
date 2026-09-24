@@ -25,19 +25,22 @@
     "terminalFg": "#D7E4D0"
   },
   "typography": {
-    "body": "\"KaiTi\", \"STKaiti\", \"楷体\", \"Microsoft YaHei\", serif",
+    "body": 36,
     "mono": "\"Cascadia Code\", Consolas, monospace",
     "display": 116,
     "title": 90,
     "header": 52,
     "h1": 44,
     "h2": 38,
-    "body": 36,
     "caption": 30,
-    "micro": 26
+    "micro": 26,
+    "bodySize": 34
   },
   "motion": {
-    "entranceSpring": {"damping": 110, "stiffness": 80},
+    "entranceSpring": {
+      "damping": 110,
+      "stiffness": 80
+    },
     "stagger": 12,
     "tableRowDelay": 8,
     "fadeFrames": 14
@@ -60,5 +63,31 @@
     "subtitleBg": "rgba(0,0,0,0.45)",
     "subtitleColor": "#FFF9E6",
     "serialLabel": "板书课堂"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
   }
 }
