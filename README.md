@@ -2,7 +2,7 @@
 
 讲稿驱动的微视频生成工具：一份 Markdown 讲稿 + 一个风格主题 → 一键输出 1080P MP4，零人工剪辑。
 
-![makevideo 一分钟介绍（本工具全自动生成）](https://github.com/zh2673-git/make-video/releases/download/v0.0.2/demo-60s.mp4)
+![makevideo 一分钟介绍（本工具全自动生成）](https://github.com/zh2673-git/make-video/releases/download/v0.0.4/demo-68s.mp4)
 
 > 本项目由 [project-dev-skill](https://github.com/zh2673-git/project-dev-skill)（时空运行时项目开发方法论）驱动开发：以空间/时间/规则三公理推导架构，以 P/Q/I 验证契约驱动实现与测试。完整方案与文档见 [program.md](program.md) 与 [docs/](docs/)。
 
@@ -10,9 +10,9 @@
 
 - **讲稿进、成片出**：配音、帧对齐、渲染、拼接全链路自动化，人只负责写讲稿。
 - **自动分镜**：`compose` 分析纯文本讲稿的内容形态（数据/步骤/对比/引语…），自动产出带版式声明的讲稿草稿。
-- **12 种分镜版式**：title / bullets / flow / table / panorama / ending / quote / compare / timeline / chart / code / image。
+- **13 种分镜版式**：title / bullets / flow / stat / table / panorama / ending / quote / compare / timeline / chart / code / image；bullets 支持 `icons:` 图标指令，stat 大数字计数动画。
 - **主题系统**：视觉风格沉淀为 theme.json token，组件零硬编码风格，换主题即换风格、内容零改动。
-- **动效变体池**：6 个常用版式各配入场动效池，按分镜顺序轮换、相邻不重复，消除机械感。
+- **动效变体池**：7 个常用版式各配入场动效池，按分镜顺序轮换、相邻不重复，消除机械感。
 - **增量渲染**：`--only` 只重画改动的分镜，其余片段缓存复用，无损拼接。
 - **词级时间戳对齐**：TTS 词级时间戳驱动帧数换算与字幕帧窗，音画逐句对齐。
 
@@ -157,11 +157,11 @@ python -m makevideo import-themes awesome-design-md/design-md
 
 新增手移植主题只需两份文件：`styles/<名>/DESIGN.md` + `themes/<名>/theme.json`。
 
-**动效变体池**（可选段 `variants`）：6 个常用版式（bullets / flow / table / quote / compare / timeline）各配入场动效池，组件按同版式出现序号轮换、相邻分镜不重复——同一条片里每次出现的版式动效不再雷同。缺省该段即用各版式默认动效，旧主题零改动兼容；变体仅动效维度，布局与色彩 token 不变。
+**动效变体池**（可选段 `variants`）：7 个常用版式（bullets / flow / stat / table / quote / compare / timeline）各配入场动效池，组件按同版式出现序号轮换、相邻分镜不重复——同一条片里每次出现的版式动效不再雷同。缺省该段即用各版式默认动效，旧主题零改动兼容；变体仅动效维度，布局与色彩 token 不变。
 
 ## 演示视频
 
-**《makevideo 一分钟介绍》**（59.5s，techdark 主题）已嵌入本 README 顶部，由 `projects/makevideo-一分钟介绍/` 讲稿一键生成，release 附件直达：[demo-60s.mp4](https://github.com/zh2673-git/make-video/releases/download/v0.0.2/demo-60s.mp4)。
+**《makevideo 一分钟介绍》**（67.8s，techdark 主题）已嵌入本 README 顶部，由 `projects/makevideo-一分钟介绍/` 讲稿一键生成（含图标要点与 stat 数字版式），release 附件直达：[demo-68s.mp4](https://github.com/zh2673-git/make-video/releases/download/v0.0.4/demo-68s.mp4)。
 
 **《makevideo 使用指南》**（2.6 分钟，techdark 主题）——进阶版动态说明书，由 `projects/makevideo-使用指南/` 讲稿一键生成，也是"以工具介绍工具"的端到端示例：修改该工程的讲稿后重跑 build，即可体验完整出片流程。
 
