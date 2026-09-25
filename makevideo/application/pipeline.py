@@ -29,7 +29,8 @@ PREVIEW_FRAMES = 90  # 试帧每分镜定长 3s
 # 主题试帧固定样例（覆盖主要版式；跳过 TTS，caption 用旁白首句）
 SAMPLE_SCENES = [
     {"id": "p1", "type": "title", "title": "主题试帧标题", "subtitle": ["副标题一", "副标题二"]},
-    {"id": "p2", "type": "bullets", "title": "要点版式", "bullets": ["第一要点：空间与时间双契约", "第二要点：主题 token 消费", "第三要点：增量渲染提速"]},
+    {"id": "p2", "type": "bullets", "title": "要点版式", "icons": ["zap", "layers", "clock"],
+     "bullets": ["第一要点：空间与时间双契约", "第二要点：主题 token 消费", "第三要点：增量渲染提速"]},
     {"id": "p3", "type": "flow", "title": "流程版式", "bullets": ["讲稿", "配音", "渲染", "成片"]},
     {"id": "p4", "type": "table", "title": "表格版式", "header": ["指标", "数值", "等级"], "rows": [["指标A", "86", "优秀"], ["指标B", "43", "良好"], ["指标C", "17", "合格"]], "highlight": "指标A"},
     {"id": "p5", "type": "quote", "title": "金句版式", "quote": "让数据说话，让线索浮出水面。", "attribution": "—— makevideo"},
@@ -37,7 +38,8 @@ SAMPLE_SCENES = [
     {"id": "p7", "type": "timeline", "title": "时间轴版式", "bullets": ["第1周|需求确认", "第2周|设计评审", "第3周|发布上线"]},
     {"id": "p8", "type": "chart", "title": "图表版式", "header": ["项目", "数值"], "rows": [["项目A", "86"], ["项目B", "43"], ["项目C", "17"]], "note": "单位：分"},
     {"id": "p9", "type": "code", "title": "代码版式", "lang": "python", "bullets": ["import pandas as pd", "df = pd.read_csv('微信账单.csv')", "freq = df.groupby(['本方', '对方']).agg(金额=('金额', 'sum'))"]},
-    {"id": "p10", "type": "ending", "title": "谢谢观看"},
+    {"id": "p10", "type": "stat", "title": "数字版式", "stats": [["59.5", "秒全片成片", "clock"], ["79", "套设计主题", "layers"], ["13", "种分镜版式", "grid"]]},
+    {"id": "p11", "type": "ending", "title": "谢谢观看"},
 ]
 
 

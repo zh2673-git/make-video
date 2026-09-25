@@ -10,6 +10,7 @@ from makevideo.core.errors import SchemaError, ThemeError
 SCENE_TYPES = {
     "title", "ending",            # 全幅版式（无页眉页脚）
     "bullets", "flow",            # 卡片要点 / 步骤流
+    "stat",                       # 数字版式（大数字计数动画）
     "table", "panorama",          # 表格（普通 / 全景高密度）
     "quote",                      # 金句
     "compare",                    # 左右对比
@@ -24,6 +25,7 @@ REQUIRED_FIELDS = {
     "table": ("header", "rows"),
     "panorama": ("header", "rows"),
     "chart": ("header", "rows"),
+    "stat": ("stats",),
     "quote": ("quote",),
     "compare": ("leftTitle", "rightTitle"),
     "image": ("image",),
@@ -48,7 +50,7 @@ THEME_META_SECTIONS = {"name", "version", "source", "desc"}
 
 # 动效变体池（可选段：缺省=组件默认动效，向后兼容旧主题）
 # 形态：{版式: ["变体A", "变体B", ...]}，组件按同版式出现序号轮换（相邻不重复）
-THEME_VARIANT_TYPES = {"bullets", "flow", "table", "quote", "compare", "timeline"}
+THEME_VARIANT_TYPES = {"bullets", "flow", "table", "quote", "compare", "timeline", "stat"}
 
 # 字段别名校验用：这些键只允许以字符串出现
 _STR_FIELDS = {"id", "type", "title", "narration", "highlight", "note", "quote",

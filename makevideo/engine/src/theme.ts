@@ -33,14 +33,14 @@ export interface Theme {
     subtitleBg: string; subtitleColor: string; serialLabel: string;
   };
   /** 动效变体池（可选段，缺省=各版式默认动效）。组件按同版式出现序号轮换，相邻分镜不重复。 */
-  variants?: Partial<Record<'bullets' | 'flow' | 'table' | 'quote' | 'compare' | 'timeline', string[]>>;
+  variants?: Partial<Record<'bullets' | 'flow' | 'stat' | 'table' | 'quote' | 'compare' | 'timeline', string[]>>;
 }
 
 export const theme = themeJson as unknown as Theme;
 
 // 各版式默认动效（= variants 缺省时的第 0 变体；组件内同名分支即当前既有行为）
 export const DEFAULT_VARIANTS: Record<string, string> = {
-  bullets: 'slide', flow: 'scale', table: 'cascade',
+  bullets: 'slide', flow: 'scale', stat: 'count', table: 'cascade',
   quote: 'mark', compare: 'slide', timeline: 'line',
 };
 

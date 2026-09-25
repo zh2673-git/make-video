@@ -5,6 +5,7 @@
 > 用户确认决定：运行模式=生产；技术栈=沿用 Python3.11+Remotion+edge-tts+ffmpeg；时空契约=按草稿；工具形态=CLI + skill 化；主题系统=双源头（awesome-design-md 移植 / canvas-design 原创）。
 > 2026-09-25 增量：v0.0.2 新增**自动分镜（compose）**与**动效变体池（variants）**，研究方向第 3 条落地。
 > 2026-09-25 增量：v0.0.3 新增 **import-themes 批量移植**，主题库扩至 79 套（74 份 awesome-design-md 全量），研究方向第 2 条核心落地（转换规则产品化为确定性算法）。
+> 2026-09-25 增量：v0.0.4 视觉词汇扩展——**图标系统**（bullets 增 `icons:` 指令，engine 内嵌 SVG 图标库）与 **stat 数字版式**（大数字计数动画，DSL 12→13 型）。渲染器只认字段，语义选择留在讲稿层。
 
 ## 项目目标
 
@@ -69,9 +70,11 @@ make-video/
 
 **依赖铁律**：themes/engine 只被消费不被反向依赖；domain 不直接调 Remotion；CLI（runtime）是唯一调度入口。
 
-## 分镜 DSL（12 型）
+## 分镜 DSL（13 型）
 
-title（片头）/ bullets（要点）/ flow（流程）/ table（表格）/ panorama（全景表）/ ending（片尾）/ quote（金句）/ chart（数据图）/ compare（对比）/ timeline（时间轴）/ code（代码）/ image（配图）。
+title（片头）/ bullets（要点）/ flow（流程）/ table（表格）/ panorama（全景表）/ ending（片尾）/ quote（金句）/ chart（数据图）/ compare（对比）/ timeline（时间轴）/ code（代码）/ image（配图）/ stat（数字，v0.0.4）。
+- **bullets 图标**：画面区 `icons: zap,rocket,shield` 按序对应各条目（缺省回退序号圆，非法图标名渲染层回退）。
+- **stat**：表格行 `| 59.5秒 | 全片时长 |`（每行 值|标签[|图标]），大数字计数动画（variants 支持 count/rise）。
 兼容性：仅用基础六型的早期格式讲稿零改动可跑。
 
 ## 验证契约（P/Q/I 框架——具体值待确认）

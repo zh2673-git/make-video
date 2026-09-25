@@ -12,7 +12,7 @@ from makevideo.core.errors import ProjectError
 _DIRECTIVES = {"subtitle": "subtitle", "highlight": "highlight", "note": "note",
                "quote": "quote", "attribution": "attribution", "lang": "lang",
                "image": "image", "imagenote": "imageNote", "lefttitle": "leftTitle",
-               "righttitle": "rightTitle", "cellcolor": "cellColor"}
+               "righttitle": "rightTitle", "cellcolor": "cellColor", "icons": "icons"}
 
 
 def parse_meta(text: str) -> dict:
@@ -77,10 +77,14 @@ def parse_script(md_path: str, overrides: dict | None = None):
                         subs.append(val)
                     elif field == "cellColor":
                         scene["cellColors"] = {**scene.get("cellColors", {}), **_parse_cell_colors(val)}
+                    elif field == "icons":  # 按序对应 bullets/stat 条目的图标名，缺项回退序号
+                        scene["icons"] = [x.strip() for x in val.split(",") if x.strip()]
                     else:
                         scene[field] = val
         if stype in ("table", "panorama", "chart") and rows:
             scene["header"], scene["rows"] = rows[0], rows[1:]
+        elif stype == "stat" and rows:  # 每行 值|标签[|图标]
+            scene["stats"] = rows
         elif stype == "compare" and rows:  # compare 亦可用表格行（左|右）
             scene["pairs"] = rows
         elif bullets:

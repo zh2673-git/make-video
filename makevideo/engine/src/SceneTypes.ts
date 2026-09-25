@@ -3,7 +3,7 @@ export type Caption = {from: number; to: number; text: string};
 
 export type SceneType =
   | 'title' | 'ending'
-  | 'bullets' | 'flow'
+  | 'bullets' | 'flow' | 'stat'
   | 'table' | 'panorama'
   | 'quote' | 'compare' | 'timeline' | 'chart' | 'code' | 'image';
 
@@ -30,6 +30,8 @@ export type Scene = {
   imageNote?: string;
   leftTitle?: string;
   rightTitle?: string;
+  icons?: string[];      // bullets/stat 条目图标名（按序对应，缺项回退序号）
+  stats?: string[][];    // stat 版式：[值, 标签, 图标?] 行
 };
 
 /** 工程 meta（meta.gen.json），全部可选。 */

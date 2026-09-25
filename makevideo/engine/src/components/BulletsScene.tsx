@@ -1,8 +1,10 @@
 // [画面组件] BulletsScene —— 要点卡片（逐项 spring stagger；token: --c-surface-card/--c-primary）
 // 动效变体：slide=左入（默认）/ rise=下起上浮 / fade=纯淡入
+// 图标：scene.icons[i] 有对应图标 → 图标圆片替代序号圆；缺项/未知名回退序号。
 import React from 'react';
 import {spring, useCurrentFrame, useVideoConfig} from 'remotion';
 import type {ProjectMeta, Scene} from '../SceneTypes';
+import {hasIcon, Icon} from '../icons';
 import {theme} from '../theme';
 import {Shell} from './Shell';
 
@@ -17,6 +19,8 @@ export const BulletsScene: React.FC<{scene: Scene; meta: ProjectMeta; variant?: 
           const shift = variant === 'rise'
             ? `translateY(${(1 - drop) * 60}px)`
             : variant === 'fade' ? 'none' : `translateX(${(1 - drop) * 60}px)`;
+          const iconName = scene.icons?.[i];
+          const withIcon = hasIcon(iconName);
           return (
             <div
               key={i}
@@ -37,7 +41,7 @@ export const BulletsScene: React.FC<{scene: Scene; meta: ProjectMeta; variant?: 
                   fontWeight: 700, border: '2px solid var(--c-accent)',
                 }}
               >
-                {i + 1}
+                {withIcon ? <Icon name={iconName!} size={30} /> : i + 1}
               </div>
               <div style={{fontSize: 'var(--fs-h1)', color: 'var(--c-ink)', fontWeight: 600}}>{b}</div>
             </div>

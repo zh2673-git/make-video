@@ -11,6 +11,7 @@ import {EndingScene} from './components/EndingScene';
 import {FlowScene} from './components/FlowScene';
 import {ImageScene} from './components/ImageScene';
 import {QuoteScene} from './components/QuoteScene';
+import {StatScene} from './components/StatScene';
 import {TableScene} from './components/TableScene';
 import {TimelineScene} from './components/TimelineScene';
 import {TitleScene} from './components/TitleScene';
@@ -22,6 +23,7 @@ const COMPONENTS: Record<SceneType, React.FC<{scene: Scene; meta: ProjectMeta; v
   ending: EndingScene,
   bullets: BulletsScene,
   flow: FlowScene,
+  stat: StatScene,
   table: TableScene,
   panorama: TableScene,
   quote: QuoteScene,

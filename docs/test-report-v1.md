@@ -159,3 +159,34 @@ P/Q/I 全部通过。工具已具备「讲稿进、成片出」的端到端能�
 
 1. 批量导入主题为**算法草稿**：色彩/半径直取原文，字体栈取上游 fallback（多数为英文字体，已补 CJK 安全栈），brand 渐变为通用模板——精调用需按 styles 文档推导备注逐套试帧微调。
 2. 散文路径（10 份）依赖角色关键词分类，个别主题若上游改版式需维护 parse_prose_colors 的关键词表。
+
+## 九、v0.0.4 增量验证（2026-09-25）
+
+新能力：**视觉词汇扩展**——图标系统（bullets `icons:` 指令 + engine 内嵌 feather 风格 SVG 图标库 ~40 名+别名）与 **stat 数字版式**（大数字计数动画，DSL 12→13 型，variants 支持 count/rise）。
+
+### Q9 契约与解析
+
+| 检查项 | 结果 | 说明 |
+|---|---|---|
+| TS 编译 | ✅ | `npx tsc --noEmit` 0 错误（SceneTypes 对偶 + MicroCourse exhaustive 映射漏型即编译报错） |
+| icons 解析 | ✅ | `icons: edit,layers,zap` → `scene["icons"]` 字符串列表；缺省场景无该字段（旧讲稿零改动） |
+| stat 解析 | ✅ | `\| 60秒 \| 一分钟成片 \| clock` 表格行 → `scene["stats"]`；E2 对缺 stats 的 stat 分镜拦截 |
+| 图标名回退 | ✅（设计） | 非法图标名渲染层回退序号圆，不阻断渲染（宽松语义层） |
+
+### Q10 端到端
+
+- 示例工程升级（projects/makevideo-一分钟介绍）：m2 bullets 加图标（edit/layers/zap）、m4 十二→十三种版式、新增 m4b stat 镜（60秒/79 套/13 种 + clock/layers/grid 图标）→ 全量 TTS+渲染出片成功。
+- `preview` 试帧样例同步：p2 bullets 带图标、p10 stat 数字版式（后续任何主题试帧即覆盖新版式）。
+
+### I 增量（v0.0.4 追加）
+
+| 不变量 | 结果 | 说明 |
+|---|---|---|
+| 旧讲稿零改动兼容 | ✅ | 去 icons 指令的讲稿解析+校验通过，无字段残留 |
+| 旧主题零改动 | ✅ | stat 未入 variants 的 79 套主题回退 DEFAULT_VARIANTS.stat='count'，无需批量更新 |
+| 时间轴不变量 | ✅ | stat 计数动画为帧内插值，frames 仍由 TTS 词级时长对齐决定 |
+
+### v0.0.4 已知限制
+
+1. 图标库为内嵌封闭集合（~40 图标）：需求扩容时增补 icons.tsx 即可；未知名静默回退序号（无告警）。
+2. flow/table 等其余版式暂不支持 icons 指令（仅 bullets/stat 消费）；composer 自动分镜不产出 stat（强调型数字场景宜人工声明）。
