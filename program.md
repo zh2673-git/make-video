@@ -67,7 +67,8 @@ make-video/
 │   └── themes/                 # 主题 token 库（design 流程产出，全局只读共享）
 ├── styles/                     # 各主题的设计哲学文档（人审源头）
 ├── projects/                   # 视频工程（每工程：讲稿.md + 素材 + 工程配置）
-│   └── makevideo-使用指南/       # 示例工程：介绍工具用法（README 演示片）
+│   ├── makevideo-创意一分钟/     # 双模式示范（creative）：讲稿 + 6 个场景代码 scenes/*.tsx
+│   └── makevideo-规则一分钟/     # 双模式示范（rule）：同旁白 13 型预制版式，零代码
 └── docs/                       # 生产模式文档树（探索模式仅 01-项目方案.md）
 ```
 
