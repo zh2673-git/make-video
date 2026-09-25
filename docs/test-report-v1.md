@@ -190,3 +190,46 @@ P/Q/I 全部通过。工具已具备「讲稿进、成片出」的端到端能�
 
 1. 图标库为内嵌封闭集合（~40 图标）：需求扩容时增补 icons.tsx 即可；未知名静默回退序号（无告警）。
 2. flow/table 等其余版式暂不支持 icons 指令（仅 bullets/stat 消费）；composer 自动分镜不产出 stat（强调型数字场景宜人工声明）。
+
+## 十、v0.0.5 增量验证（2026-09-25）
+
+新能力：**SKILL.md（LLM 创作引导单一源头）+ compose --ai（LLM 排版决策后端）+ --prompt-out 离线任务包**；错误码新增 **E7 LLM 调用失败**。
+
+### Q11 单元验证（fake LLM 注入，5/5 通过）
+
+| # | 检查项 | 结果 |
+|---|---|---|
+| 1 | `--prompt-out` 任务包：不发请求，system=SKILL.md+排版铁律、user=原文 | ✅ |
+| 2 | `--ai` 直通：合法草稿直接过 E2 校验落盘 | ✅ |
+| 3 | 回喂重试：首稿非法 → 错误回喂 → 第 2 次调用修正成功 | ✅ |
+| 4 | 双败拦截：两稿均非法 → [E2] 两次校验均失败 | ✅ |
+| 5 | prompt 组装：system 含 SKILL.md 正文+_AI_ROLE，user 含原文 | ✅ |
+
+### Q12 三模式对比实验（同一命题「介绍 makevideo 一分钟」）
+
+同一份人类原文（`projects/三模式对比/原文.txt`，约 260 字）走三种模式，各建工程出片：
+
+| 工程 | 模式 | 主题 | 分镜 | 时长 | 特征 |
+|---|---|---|---|---|---|
+| 对比A-规则链 | compose 规则链 | techdark | 6 镜 / 4 型 | 58.6s | 数字段被拍平为 bullets 短句（全片 bullets×2），无图标无 stat |
+| 对比B-LLM作者 | LLM 读 SKILL.md 自由创作（无原文输入） | magazine | 7 镜 / 7 型 | 59.0s | compare+flow+stat+bullets(icons)+quote 组合；浅色杂志风+女声（Xiaoxiao） |
+| 对比C-AI排版 | compose --prompt-out 任务包 → LLM 排版回填 | linear-app | 6 镜 / 6 型 | 58.6s | 同一原文升级：数字段→stat 计数动画（13 种/79 套/60 秒），bullets 配语义图标，条目逐字 |
+
+- **同质化对比结论**：同一输入下 A 仅 4 型且 bullets×2 相邻重复；C 升至 6 型且相邻不重复——LLM 排版决策打破规则链千篇一律，同时内容零改写。
+- 像素抽检（3s 处帧主色）：A (19,18,31) techdark 深底 / B (252,252,252) magazine 近白 / C (9,11,20) linear-app 深紫黑——三主题各自生效；C 深底经 theme.json 复核为 linear-app 原定义（surface #010102 + 紫色径向渐变），非回退。
+- 逐字铁律抽查（C）：全部条目与 narration 可回溯原文（允许顿号切条与 stat「值|标签」拆分），无增写润色。
+
+### I 增量（v0.0.5 追加）
+
+| 不变量 | 结果 | 说明 |
+|---|---|---|
+| 规则链行为不变 | ✅ | compose 缺省模式决策与 v0.0.2 一致（同输入 dry-run 复验） |
+| 未配置 LLM 时可诊断 | ✅ | 缺环境变量抛 [E7]，提示中给出 --prompt-out 离线通道 |
+| prompt-out 零网络依赖 | ✅ | 任务包落盘不发请求；回填产物过 validate（E2）即可 build |
+| LLM 草稿必过校验 | ✅ | 草稿过真实 parser+validate_scenes（E2），失败回喂重试 1 次，round-trip 复验 |
+| 存量功能零影响 | ✅ | 本轮纯 Python 层改动（engine 无变化），旧工程 validate/build 不受影响 |
+
+### v0.0.5 已知限制
+
+1. `--ai` 直连需用户自备 OpenAI 兼容端点与 key；本仓库验证走 `--prompt-out` 离线等价通道（LLM 后端由人充当回填）。
+2. 排版模式「逐字铁律」依赖 LLM 遵守 prompt 约定，护栏只保证 DSL 合法、不校验逐字性（后续可加原文 diff 校验）。

@@ -8,7 +8,7 @@ import json
 import os
 import re
 
-from makevideo.core.errors import ProjectError, TtsCountError
+from makevideo.core.errors import MakeVideoError, ProjectError, SchemaError, TtsCountError
 from makevideo.core.schema import validate_scenes
 from makevideo.domain.composer import compose_script as compose_draft
 from makevideo.domain.composer import render_markdown
@@ -131,26 +131,92 @@ def validate_project(project_dir: str) -> dict:
             "types": sorted({s["type"] for s in scenes})}
 
 
-def compose_script(input_path: str, out_path: str | None = None, dry_run: bool = False) -> dict:
-    """纯文本讲稿 → 自动分镜讲稿.md（草稿）。生成即校验，落盘后回读复验（round-trip 自证）。"""
+# ---- compose --ai：LLM 排版决策后端（SKILL.md 为提示单一源头） ----
+_SKILL_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "SKILL.md")
+_AI_ROLE = """
+
+## 当前任务（排版模式——上文的角色边界立即生效）
+
+对下面的人类原文做**排版决策**：分镜切分、版式选择、bullets/stat 图标配置。
+铁律：所有条目与 narration **逐字取自原文**（允许按句切分、允许在 stat 中拆出"值|标签"结构），不增写、不改写、不润色。
+输出完整讲稿.md（含 meta 行与全部 SCENE 块），只输出讲稿本身，不要任何解释、代码围栏或多余文字。"""
+
+
+def _ai_prompts(text: str) -> tuple[str, str]:
+    skill = open(_SKILL_PATH, encoding="utf-8").read() if os.path.isfile(_SKILL_PATH) else ""
+    if not skill:
+        raise ProjectError(f"LLM 引导文档缺失: {_SKILL_PATH}")
+    system = skill + _AI_ROLE
+    user = f"【人类原文】\n{text.strip()}\n\n请按排版模式输出完整讲稿.md。"
+    return system, user
+
+
+def _validate_draft(draft: str):
+    """草稿过真实 parser + E2 校验。返回 (scenes, None) 或 (None, 错误文本)。"""
+    import tempfile
+    fd, p = tempfile.mkstemp(suffix=".md")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(draft)
+        _, scenes = parse_script(p)
+        validate_scenes(scenes)
+        return scenes, None
+    except MakeVideoError as e:
+        return None, str(e)
+    finally:
+        os.remove(p)
+
+
+def compose_script(input_path: str, out_path: str | None = None, dry_run: bool = False,
+                   ai: bool = False, prompt_out: str | None = None) -> dict:
+    """纯文本讲稿 → 自动分镜讲稿.md（草稿）。生成即校验，落盘后回读复验（round-trip 自证）。
+    ai=True 走 LLM 排版决策后端；prompt_out 指定路径则不发请求、落盘提示任务包（离线替代）。"""
     try:
         text = open(input_path, encoding="utf-8").read()
     except OSError as e:
         raise ProjectError(f"输入文本不可读: {input_path} ({e})")
     if "## SCENE" in text:
         raise ProjectError("输入已含 SCENE 分镜块：该讲稿已有版式声明，直接 build 即可")
-    scenes = compose_draft(text)
-    validate_scenes(scenes)  # 生成即校验：草稿保证 E2 干净
+
+    if prompt_out:  # 离线任务包：SKILL.md（system）+ 原文（user），交给任意 LLM 环境回填
+        system, user = _ai_prompts(text)
+        with open(prompt_out, "w", encoding="utf-8") as f:
+            f.write(f"<!-- 任务包：将 <user> 交给 LLM（system 已含规范），回填结果存为讲稿.md -->\n"
+                    f"<!-- <system> -->\n{system}\n<!-- </system> -->\n\n<!-- <user> -->\n{user}\n<!-- </user> -->\n")
+        print(f"[COMPOSE] 任务包 -> {prompt_out}（交给 LLM 回填；或配置 MAKEVIDEO_LLM_* 后用 --ai 直连）")
+        return {"scenes": 0, "out": prompt_out, "mode": "prompt-out"}
+
+    if ai:  # LLM 排版决策：E2 护栏校验，失败回喂错误重试一次
+        from makevideo.infrastructure.llm import chat
+        system, user = _ai_prompts(text)
+        draft, scenes, errs = chat(system, user), None, None
+        for attempt in (1, 2):
+            scenes, errs = _validate_draft(draft)
+            if scenes:
+                break
+            if attempt == 1:
+                print(f"[AI] 草稿未过校验，回喂重试：{errs.splitlines()[0] if errs else '?'}")
+                draft = chat(system, user + f"\n\n【你的上次输出未通过校验】\n{errs}\n请修正后重新输出完整讲稿.md。")
+        if not scenes:
+            raise SchemaError(f"LLM 草稿两次校验均失败：\n{errs}")
+        draft_md = draft
+        mode = "ai"
+    else:  # 规则链（离线缺省档）
+        scenes = compose_draft(text)
+        validate_scenes(scenes)  # 生成即校验：草稿保证 E2 干净
+        draft_md = render_markdown(scenes)
+        mode = "rules"
+
     out_path = out_path or re.sub(r"\.(txt|md)$", "", input_path) + "_分镜.md"
     if not dry_run:
         with open(out_path, "w", encoding="utf-8") as f:
-            f.write(render_markdown(scenes))
+            f.write(draft_md)
         _, reread = parse_script(out_path)  # round-trip：产物必须能被 parser 原样解析
         validate_scenes(reread)
-    print(f"[COMPOSE] {len(scenes)} 镜（" + ("dry-run 预览" if dry_run else f"-> {out_path}") + "）")
+    print(f"[COMPOSE:{mode}] {len(scenes)} 镜（" + ("dry-run 预览" if dry_run else f"-> {out_path}") + "）")
     for s in scenes:
         print(f"  {s['id']}  {s['type']:<9} {s.get('why', ''):<24} | {s['title'][:20]}")
-    return {"scenes": len(scenes), "out": None if dry_run else out_path}
+    return {"scenes": len(scenes), "out": None if dry_run else out_path, "mode": mode}
 
 
 def preview_theme(theme_name: str, out_dir: str | None = None) -> list:

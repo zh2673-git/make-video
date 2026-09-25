@@ -38,6 +38,8 @@ def main(argv=None) -> int:
     pc.add_argument("input", help="纯文本讲稿文件（.txt/.md，不含 SCENE 块）")
     pc.add_argument("-o", "--out", help="输出路径（默认 <input>_分镜.md）")
     pc.add_argument("--dry-run", action="store_true", help="仅打印分镜决策，不写文件")
+    pc.add_argument("--ai", action="store_true", help="LLM 排版决策后端（需 MAKEVIDEO_LLM_API_KEY/MODEL，OpenAI 兼容协议）")
+    pc.add_argument("--prompt-out", help="不发请求：落盘 LLM 任务包（SKILL.md 规范+原文），交给任意 LLM 环境回填")
 
     sub.add_parser("list-themes", help="列出主题库")
 
@@ -58,7 +60,7 @@ def main(argv=None) -> int:
             info = validate_project(a.project)
             print(f"[VALID] {info}")
         elif a.cmd == "compose":
-            compose_script(a.input, out_path=a.out, dry_run=a.dry_run)
+            compose_script(a.input, out_path=a.out, dry_run=a.dry_run, ai=a.ai, prompt_out=a.prompt_out)
         elif a.cmd == "list-themes":
             themes = list_themes()
             print("\n".join(themes) if themes else "(主题库为空)")

@@ -2,7 +2,7 @@
 """[时空层级：数据规范（规则）] core/errors.py —— 错误码与工具异常
 
 E1 工程配置缺失 | E2 DSL 校验失败 | E3 主题缺失/校验失败
-E4 TTS 数量不一致 | E5 渲染非零退出 | E6 拼接失败
+E4 TTS 数量不一致 | E5 渲染非零退出 | E6 拼接失败 | E7 LLM 调用失败
 """
 
 
@@ -35,3 +35,7 @@ class RenderError(MakeVideoError):  # Remotion 渲染失败
 
 class ConcatError(MakeVideoError):  # 分段拼接失败
     code = "E6"
+
+
+class LLMError(MakeVideoError):  # compose --ai：LLM 接口调用失败/未配置
+    code = "E7"
