@@ -124,3 +124,38 @@ P/Q/I 全部通过。工具已具备「讲稿进、成片出」的端到端能�
 
 1. **分段缓存无主题/变体维度**（沿承已知限制 1）：变体生效后同 id 段的画面随主题 variants 变化，`--only` 复用旧段不会自动重渲；当前以删除被污染段兜底。
 2. compare 分支要求显式「A vs B / A 与 B 的对比」标记且能切出 ≥2 对照行，条件较严——不足时兜底 bullets（人审可改）。
+
+## 八、v0.0.3 增量验证（2026-09-25）
+
+新能力：**awesome-design-md 批量移植（import-themes）**；修复：**存量 5 主题 typography.body 数字→字体栈**（`--font-body` 此前接收数字导致正文字体回退默认，同 bodySize 一族的契约隐患）。
+
+### Q7 批量移植覆盖率
+
+上游 [awesome-design-md](https://github.com/VoltAgent/awesome-design-md) `design-md/` 全部 **74** 份 DESIGN.md：
+
+| 解析路径 | 数量 | 结果 |
+|---|---|---|
+| frontmatter（结构化 token） | 64 | 64/64 成功 |
+| 散文角色标注（无 frontmatter） | 10 | 10/10 成功（kraken/lamborghini/lovable/mastercard/runwayml/sanity/spotify/starbucks/tesla/theverge） |
+
+- 主题库 5 预置 + 74 移植 = **79 套**，全部通过 `load_theme` E3 校验（0 失败）。
+- 转换保真度抽查：linear-app（primary #5E6AD2 / surface 阶梯 / radius=12 直取原文）；spotify（prose 路径 primary #1ED760 / surface #121212 / card #181818 / inkMuted #B3B3B3 全命中）；nintendo-2001（行内注释容忍）。
+- 每套主题附带 styles/<slug>/DESIGN.md：溯源头 + 推导备注（darken/lighten/hue_rotate 兜底透明披露）+ 第 10 节动效默认档。
+
+### Q8 导入主题端到端可渲染
+
+- `preview linear-app`：10 版式试帧全部渲染成功（Remotion 消费生成的 theme.gen.json）。
+- 全量试帧抽查：74 导入主题 × bullets/table 2 帧，人审素材落盘（临时目录，不入库）。
+
+### I 增量（v0.0.3 追加）
+
+| 不变量 | 结果 | 说明 |
+|---|---|---|
+| E3 先拦截后落盘 | ✅ | save_theme 校验失败不写盘；79 主题回读复验 0 失败 |
+| 既有工程零影响 | ✅ | 存量 5 主题仅 body 类型修正；1 分钟/2.6 分钟工程重渲可用 |
+| 转换确定性 | ✅ | 同一输入重复运行产物一致（--force 重生成 diff 为空） |
+
+### v0.0.3 已知限制
+
+1. 批量导入主题为**算法草稿**：色彩/半径直取原文，字体栈取上游 fallback（多数为英文字体，已补 CJK 安全栈），brand 渐变为通用模板——精调用需按 styles 文档推导备注逐套试帧微调。
+2. 散文路径（10 份）依赖角色关键词分类，个别主题若上游改版式需维护 parse_prose_colors 的关键词表。

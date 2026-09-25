@@ -2,6 +2,8 @@
 
 讲稿驱动的微视频生成工具：一份 Markdown 讲稿 + 一个风格主题 → 一键输出 1080P MP4，零人工剪辑。
 
+![makevideo 一分钟介绍（本工具全自动生成）](https://github.com/zh2673-git/make-video/releases/download/v0.0.2/demo-60s.mp4)
+
 > 本项目由 [project-dev-skill](https://github.com/zh2673-git/project-dev-skill)（时空运行时项目开发方法论）驱动开发：以空间/时间/规则三公理推导架构，以 P/Q/I 验证契约驱动实现与测试。完整方案与文档见 [program.md](program.md) 与 [docs/](docs/)。
 
 ## 特性
@@ -133,6 +135,7 @@ python -m makevideo compose <文本文件> [-o 输出.md] [--dry-run]   # 纯文
 python -m makevideo preview <主题名>             # 固定样例分镜渲染试帧 PNG
 python -m makevideo validate <工程目录>          # 仅校验讲稿 DSL + 主题 token
 python -m makevideo list-themes                  # 列出可用主题
+python -m makevideo import-themes <design-md目录> [--only 名,名] [--force]   # awesome-design-md 批量移植
 ```
 
 - `--only`：增量渲染，只重渲指定分镜，其余复用 `engine/out/segments/` 缓存后无损拼接。
@@ -141,15 +144,26 @@ python -m makevideo list-themes                  # 列出可用主题
 
 ## 主题系统
 
-设计系统文档（`styles/<主题>/DESIGN.md`，双源头：移植自 awesome-design-md 开源设计系统 / 按 canvas-design 方法论原创，均附第 10 节 Motion & Video Rules）→ AI 按**编译期固定转换规则**生成 `themes/<主题>/theme.json`（过滤交互态与响应式断点、阴影转层次参数、字体层级转字幕层级）→ 6 宫格试帧人审定稿 → Remotion 组件只读 token 渲染。
+设计系统文档（`styles/<主题>/DESIGN.md`，双源头：移植自 awesome-design-md 开源设计系统 / 按 canvas-design 方法论原创，均附第 10 节 Motion & Video Rules）→ `themes/<主题>/theme.json`（过滤交互态与响应式断点、阴影转层次参数、字体层级转字幕层级）→ 试帧人审定稿 → Remotion 组件只读 token 渲染。
 
-预置主题：govgold（政务红金）、chalkboard（黑板手写）、magazine（极简杂志）、techdark（科技暗色）、warmedu（暖色教育）。新增主题只需两份文件：`styles/<名>/DESIGN.md` + `themes/<名>/theme.json`。
+当前主题库 **79 套**：5 套预置（govgold 政务红金 / chalkboard 黑板手写 / magazine 极简杂志 / techdark 科技暗色 / warmedu 暖色教育）+ 74 套自 [awesome-design-md](https://github.com/VoltAgent/awesome-design-md) 批量移植（linear-app、spotify、vercel、stripe、notion、figma、nvidia、tesla…）。
+
+**批量移植（import-themes）**：上游 DESIGN.md 是结构化的 token 文档（64 份 YAML frontmatter + 10 份散文角色标注），导入器按编译期固定规则确定性转换——核心 token（primary/ink/canvas/rounded 等）直取原文；缺省 token 用色彩数学推导（mix/darken/hue_rotate + 对比度校验）；字号阶映射视频画布常量；动效/变体池为默认档。转换即校验（E3 先拦截后落盘），每套主题同步产出带溯源头与推导备注的 styles 文档，供试帧后人工微调：
+
+```
+git clone --depth 1 https://github.com/VoltAgent/awesome-design-md
+python -m makevideo import-themes awesome-design-md/design-md
+```
+
+新增手移植主题只需两份文件：`styles/<名>/DESIGN.md` + `themes/<名>/theme.json`。
 
 **动效变体池**（可选段 `variants`）：6 个常用版式（bullets / flow / table / quote / compare / timeline）各配入场动效池，组件按同版式出现序号轮换、相邻分镜不重复——同一条片里每次出现的版式动效不再雷同。缺省该段即用各版式默认动效，旧主题零改动兼容；变体仅动效维度，布局与色彩 token 不变。
 
 ## 演示视频
 
-**《makevideo 使用指南》**（2.6 分钟，techdark 主题）——本 README 的动态版说明书，由 `projects/makevideo-使用指南/` 讲稿一键生成，也是"以工具介绍工具"的端到端示例：修改该工程的讲稿后重跑 build，即可体验完整出片流程。
+**《makevideo 一分钟介绍》**（59.5s，techdark 主题）已嵌入本 README 顶部，由 `projects/makevideo-一分钟介绍/` 讲稿一键生成，release 附件直达：[demo-60s.mp4](https://github.com/zh2673-git/make-video/releases/download/v0.0.2/demo-60s.mp4)。
+
+**《makevideo 使用指南》**（2.6 分钟，techdark 主题）——进阶版动态说明书，由 `projects/makevideo-使用指南/` 讲稿一键生成，也是"以工具介绍工具"的端到端示例：修改该工程的讲稿后重跑 build，即可体验完整出片流程。
 
 ▶ [观看《makevideo 使用指南》演示视频（2.6 分钟）](assets/demo.mp4)
 

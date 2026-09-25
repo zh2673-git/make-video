@@ -26,3 +26,14 @@ def load_theme(name: str) -> dict:
     theme = json.load(open(path, encoding="utf-8"))
     validate_theme(theme, name)
     return theme
+
+
+def save_theme(name: str, theme: dict) -> None:
+    """写入主题（import-themes 用）：先校验后落盘，失败即停不留半成品。"""
+    validate_theme(theme, name)
+    d = os.path.join(THEMES_DIR, name)
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "theme.json"), "w", encoding="utf-8") as f:
+        json.dump(theme, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+    load_theme(name)  # 回读复验

@@ -174,3 +174,94 @@ def preview_theme(theme_name: str, out_dir: str | None = None) -> list:
         print(f"[PREVIEW] {s['type']} -> {abs_png}")
     print(f"[OK] 主题试帧 x{len(produced)} -> {out_dir}")
     return produced
+
+
+# ---------------- awesome-design-md 批量移植（v0.0.3） ----------------
+
+_MOTION_DOC = """
+## 10. Motion & Video Rules（导入默认档）
+
+原 DESIGN.md 为 Web 语义，不含视频维度；以下为 `import-themes` 统一默认档，试帧后可按主题性格微调：
+
+| 维度 | 默认值 |
+|---|---|
+| 入场动效 | spring（damping 120 / stiffness 105），列表错峰 stagger 9 帧 |
+| 表格行 | 逐行延迟 6 帧（cascade 变体） |
+| 淡入时长 | 12 帧（0.4s） |
+| 字幕 | 底部深色底条 + 白字（rgba 由 surface 亮度推导） |
+| 动效变体池 | bullets slide/rise · flow scale/rise · table cascade/fade · quote mark/rise · compare slide/fade · timeline line/pulse |
+"""
+
+
+def _write_styles_doc(styles_dir: str, slug: str, folder: str, original: str,
+                      mode: str, notes: list) -> str:
+    d = os.path.join(styles_dir, slug)
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, "DESIGN.md")
+    header = (
+        f"> 源头：批量移植（[awesome-design-md](https://github.com/VoltAgent/awesome-design-md)"
+        f" · design-md/{folder}）| `import-themes` 自动转换（{mode} 解析）\n"
+        f"> 转换规则：过滤交互态与响应式断点（固定 1920×1080 画布）；字号阶映射视频画布常量；"
+        f"动效为默认档（见文末第 10 节）。\n"
+        f"> 推导备注：{'; '.join(notes) if notes else '无——核心 token 直取原文'}\n"
+        f"> 完整范式见 govgold 版。\n\n"
+    )
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(header + original.rstrip() + "\n\n---\n" + _MOTION_DOC)
+    return path
+
+
+def import_themes(repo_dir: str, only: set | None = None, force: bool = False) -> dict:
+    """awesome-design-md 批量移植：design-md/<folder>/DESIGN.md → themes/<slug>/theme.json
+    + styles/<slug>/DESIGN.md。转换即校验（E3 先拦截后落盘），跳过同名主题（--force 覆盖）。"""
+    from makevideo.domain import designmd
+    from makevideo.infrastructure import themeio
+    from makevideo.infrastructure.themeio import save_theme
+    if not os.path.isdir(repo_dir):
+        raise ProjectError(f"design-md 目录不存在: {repo_dir}")
+    styles_dir = os.path.join(os.path.dirname(PKG_DIR), "styles")
+    rows = []
+    for folder in sorted(os.listdir(repo_dir)):
+        src = os.path.join(repo_dir, folder, "DESIGN.md")
+        if not os.path.isfile(src):
+            continue
+        slug = re.sub(r"[^a-z0-9-]+", "-", folder.lower()).strip("-")
+        if only and slug not in only:
+            continue
+        text = open(src, encoding="utf-8").read()
+        fm = designmd.parse_frontmatter(text)
+        radius, colors, mode = None, {}, "fm"
+        if fm:
+            raw = fm.get("colors") or {}
+            colors = {k: v for k, v in raw.items() if isinstance(v, str) and designmd._HEX_RE.match(v.strip())}
+            rounded = fm.get("rounded") or {}
+            rv = isinstance(rounded, dict) and (rounded.get("lg") or rounded.get("md"))
+            if isinstance(rv, str) and rv.strip().endswith("px"):
+                try:
+                    radius = int(float(rv.strip().replace("px", "")))
+                except ValueError:
+                    radius = None
+        else:
+            colors, mode = designmd.parse_prose_colors(text), "prose"
+        theme, notes, status = None, [], "ok"
+        if not colors:
+            status, notes = "SKIP", ["未提取到颜色 token"]
+        else:
+            try:
+                desc = str((fm or {}).get("description") or folder)
+                theme, notes = designmd.build_theme(slug, folder, colors, text, desc, radius)
+                if not force and slug in themeio.list_themes():
+                    status, theme = "SKIP", None
+                    notes = ["同名主题已存在（--force 覆盖）"]
+            except ValueError as e:
+                status, theme, notes = "SKIP", None, [str(e)]
+        if theme:
+            save_theme(slug, theme)
+            _write_styles_doc(styles_dir, slug, folder, text, mode, notes)
+        rows.append({"slug": slug, "mode": mode, "status": status, "notes": notes})
+    ok = [r for r in rows if r["status"] == "ok"]
+    print(f"[IMPORT] 共 {len(rows)} 个模板：成功 {len(ok)}，跳过 {len(rows) - len(ok)}")
+    for r in rows:
+        mark = "+" if r["status"] == "ok" else "x"
+        print(f"  {mark} {r['slug']:<24} [{r['mode']:<5}] {'; '.join(r['notes'])[:72]}")
+    return {"total": len(rows), "ok": len(ok), "skipped": len(rows) - len(ok)}

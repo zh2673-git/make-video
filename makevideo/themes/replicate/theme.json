@@ -1,0 +1,93 @@
+{
+  "name": "replicate",
+  "version": 1,
+  "source": "ported/awesome-design-md:replicate",
+  "desc": "|",
+  "palette": {
+    "primary": "#EA2804",
+    "primaryDark": "#C01F00",
+    "primaryLight": "#EE4F31",
+    "accent": "#EAAE04",
+    "accentSoft": "#F8E3A7",
+    "surface": "#F9F7F3",
+    "surfaceCard": "#FFFFFF",
+    "surfaceAlt": "#202020",
+    "ink": "#202020",
+    "inkMuted": "#646464",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#1E7B34",
+    "info": "#EAAE04",
+    "warning": "#B7791F",
+    "highlightRow": "#FAEBC0",
+    "terminalBg": "#1A1A2E",
+    "terminalFg": "#EAEAEA"
+  },
+  "typography": {
+    "body": "\"lineHeight: 1.0\", system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 16
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(234,40,4,0.1), transparent 55%), linear-gradient(160deg, #F9F7F3 0%, #F8E2DB 60%, #F9F7F3 100%)",
+    "headerBg": "linear-gradient(90deg, #FFFFFF, #FCE5E1)",
+    "footerBg": "linear-gradient(90deg, #FFFFFF, #FCE5E1)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(234,174,4,0.14), transparent 40%), radial-gradient(circle at 10% 90%, rgba(234,40,4,0.1), transparent 45%), #F9F7F3",
+    "subtitleBg": "rgba(124,124,122,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "REPLICATE"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

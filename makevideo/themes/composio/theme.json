@@ -1,0 +1,93 @@
+{
+  "name": "composio",
+  "version": 1,
+  "source": "ported/awesome-design-md:composio",
+  "desc": "A developer-tools brand for AI-agent tool integration whose",
+  "palette": {
+    "primary": "#0007CD",
+    "primaryDark": "#000594",
+    "primaryLight": "#2E34D6",
+    "accent": "#00D4FF",
+    "accentSoft": "#A6F0FF",
+    "surface": "#0F0F0F",
+    "surfaceCard": "#181818",
+    "surfaceAlt": "#2A2A2A",
+    "ink": "#FFFFFF",
+    "inkMuted": "#888888",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#33D17A",
+    "info": "#00D4FF",
+    "warning": "#F5C15C",
+    "highlightRow": "rgba(0,212,255,0.14)",
+    "terminalBg": "#0A0A0A",
+    "terminalFg": "#99EEFF"
+  },
+  "typography": {
+    "body": "\"ui-sans-serif\", system-ui, sans-serif, system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 12
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(0,7,205,0.22), transparent 55%), linear-gradient(160deg, #0F0F0F 0%, #0E0E22 60%, #0F0F0F 100%)",
+    "headerBg": "linear-gradient(90deg, #181818, #15162E)",
+    "footerBg": "linear-gradient(90deg, #181818, #15162E)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(0,212,255,0.08), transparent 40%), radial-gradient(circle at 10% 90%, rgba(0,7,205,0.22), transparent 45%), #0F0F0F",
+    "subtitleBg": "rgba(8,8,8,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "COMPOSIO"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

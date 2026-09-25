@@ -1,0 +1,93 @@
+{
+  "name": "airbnb",
+  "version": 1,
+  "source": "ported/awesome-design-md:airbnb",
+  "desc": "A warm, generous consumer marketplace anchored on a clean",
+  "palette": {
+    "primary": "#FF385C",
+    "primaryDark": "#E00B41",
+    "primaryLight": "#FF5C79",
+    "accent": "#FF8838",
+    "accentSoft": "#FFD5B9",
+    "surface": "#FFFFFF",
+    "surfaceCard": "#F2F2F2",
+    "surfaceAlt": "#E4E4E4",
+    "ink": "#222222",
+    "inkMuted": "#6A6A6A",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#1E7B34",
+    "info": "#FF8838",
+    "warning": "#B7791F",
+    "highlightRow": "#FFE1CD",
+    "terminalBg": "#1A1A2E",
+    "terminalFg": "#EAEAEA"
+  },
+  "typography": {
+    "body": "\"Circular\", -apple-system, system-ui, system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 20
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(255,56,92,0.1), transparent 55%), linear-gradient(160deg, #FFFFFF 0%, #FFEBEF 60%, #FFFFFF 100%)",
+    "headerBg": "linear-gradient(90deg, #F2F2F2, #F4DCE0)",
+    "footerBg": "linear-gradient(90deg, #F2F2F2, #F4DCE0)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(255,136,56,0.14), transparent 40%), radial-gradient(circle at 10% 90%, rgba(255,56,92,0.1), transparent 45%), #FFFFFF",
+    "subtitleBg": "rgba(128,128,128,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "AIRBNB"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

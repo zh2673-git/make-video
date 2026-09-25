@@ -1,0 +1,93 @@
+{
+  "name": "x-ai",
+  "version": 1,
+  "source": "ported/awesome-design-md:x.ai",
+  "desc": "An inspired interpretation of xAI's design language — Elon",
+  "palette": {
+    "primary": "#FFFFFF",
+    "primaryDark": "#B8B8B8",
+    "primaryLight": "#FFFFFF",
+    "accent": "#A0C3EC",
+    "accentSoft": "#DEEAF8",
+    "surface": "#0A0A0A",
+    "surfaceCard": "#191919",
+    "surfaceAlt": "#272727",
+    "ink": "#FFFFFF",
+    "inkMuted": "#7D8187",
+    "onPrimary": "#0A0A0A"
+  },
+  "semantic": {
+    "success": "#3ED598",
+    "info": "#A0C3EC",
+    "warning": "#F5C15C",
+    "highlightRow": "rgba(160,195,236,0.14)",
+    "terminalBg": "#060606",
+    "terminalFg": "#D9E7F7"
+  },
+  "typography": {
+    "body": "Inter, system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 14
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(255,255,255,0.22), transparent 55%), linear-gradient(160deg, #0A0A0A 0%, #222222 60%, #0A0A0A 100%)",
+    "headerBg": "linear-gradient(90deg, #191919, #353535)",
+    "footerBg": "linear-gradient(90deg, #191919, #353535)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(160,195,236,0.08), transparent 40%), radial-gradient(circle at 10% 90%, rgba(255,255,255,0.22), transparent 45%), #0A0A0A",
+    "subtitleBg": "rgba(5,5,5,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "X-AI"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

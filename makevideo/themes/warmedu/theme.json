@@ -25,7 +25,7 @@
     "terminalFg": "#FFE8CC"
   },
   "typography": {
-    "body": 34,
+    "body": "\"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif",
     "mono": "Consolas, monospace",
     "display": 112,
     "title": 88,

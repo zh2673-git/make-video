@@ -25,7 +25,7 @@
     "terminalFg": "#C8F0FF"
   },
   "typography": {
-    "body": 34,
+    "body": "\"Inter\", \"SF Pro Display\", system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
     "mono": "\"JetBrains Mono\", Consolas, monospace",
     "display": 116,
     "title": 90,

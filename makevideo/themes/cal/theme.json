@@ -1,0 +1,93 @@
+{
+  "name": "cal",
+  "version": 1,
+  "source": "ported/awesome-design-md:cal",
+  "desc": "A clean, calendar-software-first interface anchored on",
+  "palette": {
+    "primary": "#111111",
+    "primaryDark": "#0C0C0C",
+    "primaryLight": "#3C3C3C",
+    "accent": "#111111",
+    "accentSoft": "#ACACAC",
+    "surface": "#FFFFFF",
+    "surfaceCard": "#F5F5F5",
+    "surfaceAlt": "#E5E7EB",
+    "ink": "#111111",
+    "inkMuted": "#6B7280",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#10B981",
+    "info": "#111111",
+    "warning": "#F59E0B",
+    "highlightRow": "#C4C4C4",
+    "terminalBg": "#1A1A2E",
+    "terminalFg": "#EAEAEA"
+  },
+  "typography": {
+    "body": "-apple-system, \"BlinkMacSystemFont\", \"Segoe UI\", system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 12
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(17,17,17,0.1), transparent 55%), linear-gradient(160deg, #FFFFFF 0%, #E7E7E7 60%, #FFFFFF 100%)",
+    "headerBg": "linear-gradient(90deg, #F5F5F5, #DADADA)",
+    "footerBg": "linear-gradient(90deg, #F5F5F5, #DADADA)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(17,17,17,0.14), transparent 40%), radial-gradient(circle at 10% 90%, rgba(17,17,17,0.1), transparent 45%), #FFFFFF",
+    "subtitleBg": "rgba(128,128,128,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "CAL"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

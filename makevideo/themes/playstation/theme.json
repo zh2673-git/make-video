@@ -1,0 +1,93 @@
+{
+  "name": "playstation",
+  "version": 1,
+  "source": "ported/awesome-design-md:playstation",
+  "desc": "|",
+  "palette": {
+    "primary": "#0070D1",
+    "primaryDark": "#004D8D",
+    "primaryLight": "#2E8AD9",
+    "accent": "#0A00D1",
+    "accentSoft": "#A9A6EF",
+    "surface": "#FBFBFC",
+    "surfaceCard": "#ECECED",
+    "surfaceAlt": "#121314",
+    "ink": "#000000",
+    "inkMuted": "#CCCCCC",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#1E7B34",
+    "info": "#0A00D1",
+    "warning": "#C81B3A",
+    "highlightRow": "#C2BFF4",
+    "terminalBg": "#1A1A2E",
+    "terminalFg": "#EAEAEA"
+  },
+  "typography": {
+    "body": "\"sst\", system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 16
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(0,112,209,0.1), transparent 55%), linear-gradient(160deg, #FBFBFC 0%, #E2EDF8 60%, #FBFBFC 100%)",
+    "headerBg": "linear-gradient(90deg, #ECECED, #D0DDEA)",
+    "footerBg": "linear-gradient(90deg, #ECECED, #D0DDEA)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(10,0,209,0.14), transparent 40%), radial-gradient(circle at 10% 90%, rgba(0,112,209,0.1), transparent 45%), #FBFBFC",
+    "subtitleBg": "rgba(126,126,126,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "PLAYSTATION"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

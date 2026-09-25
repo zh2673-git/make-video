@@ -1,0 +1,93 @@
+{
+  "name": "clickhouse",
+  "version": 1,
+  "source": "ported/awesome-design-md:clickhouse",
+  "desc": "A high-performance database interface anchored on near-pure",
+  "palette": {
+    "primary": "#FAFF69",
+    "primaryDark": "#E6EB52",
+    "primaryLight": "#FBFF84",
+    "accent": "#3B82F6",
+    "accentSoft": "#BAD3FC",
+    "surface": "#0A0A0A",
+    "surfaceCard": "#1A1A1A",
+    "surfaceAlt": "#121212",
+    "ink": "#FFFFFF",
+    "inkMuted": "#888888",
+    "onPrimary": "#0A0A0A"
+  },
+  "semantic": {
+    "success": "#22C55E",
+    "info": "#3B82F6",
+    "warning": "#F59E0B",
+    "highlightRow": "rgba(59,130,246,0.14)",
+    "terminalBg": "#060606",
+    "terminalFg": "#B1CDFB"
+  },
+  "typography": {
+    "body": "-apple-system, \"BlinkMacSystemFont\", \"Segoe UI\", system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 12
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(250,255,105,0.22), transparent 55%), linear-gradient(160deg, #0A0A0A 0%, #222214 60%, #0A0A0A 100%)",
+    "headerBg": "linear-gradient(90deg, #1A1A1A, #353523)",
+    "footerBg": "linear-gradient(90deg, #1A1A1A, #353523)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(59,130,246,0.08), transparent 40%), radial-gradient(circle at 10% 90%, rgba(250,255,105,0.22), transparent 45%), #0A0A0A",
+    "subtitleBg": "rgba(5,5,5,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "CLICKHOUSE"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

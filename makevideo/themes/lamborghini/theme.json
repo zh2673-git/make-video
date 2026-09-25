@@ -1,0 +1,93 @@
+{
+  "name": "lamborghini",
+  "version": 1,
+  "source": "ported/awesome-design-md:lamborghini",
+  "desc": "lamborghini",
+  "palette": {
+    "primary": "#FFC000",
+    "primaryDark": "#B88A00",
+    "primaryLight": "#FFCB2E",
+    "accent": "#A9FF00",
+    "accentSoft": "#E1FFA6",
+    "surface": "#000000",
+    "surfaceCard": "#202020",
+    "surfaceAlt": "#1F1F1F",
+    "ink": "#FFFFFF",
+    "inkMuted": "#F5F5F5",
+    "onPrimary": "#111318"
+  },
+  "semantic": {
+    "success": "#3ED598",
+    "info": "#A9FF00",
+    "warning": "#F5C15C",
+    "highlightRow": "rgba(169,255,0,0.14)",
+    "terminalBg": "#000000",
+    "terminalFg": "#DDFF99"
+  },
+  "typography": {
+    "body": "\"LamboType\", system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 14
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(255,192,0,0.22), transparent 55%), linear-gradient(160deg, #000000 0%, #1A1300 60%, #000000 100%)",
+    "headerBg": "linear-gradient(90deg, #202020, #3B331C)",
+    "footerBg": "linear-gradient(90deg, #202020, #3B331C)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(169,255,0,0.08), transparent 40%), radial-gradient(circle at 10% 90%, rgba(255,192,0,0.22), transparent 45%), #000000",
+    "subtitleBg": "rgba(0,0,0,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "LAMBORGHINI"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "name": "theverge",
+  "version": 1,
+  "source": "ported/awesome-design-md:theverge",
+  "desc": "theverge",
+  "palette": {
+    "primary": "#3CFFD0",
+    "primaryDark": "#2BB896",
+    "primaryLight": "#5FFFD8",
+    "accent": "#3CBCFF",
+    "accentSoft": "#BBE8FF",
+    "surface": "#131313",
+    "surfaceCard": "#309875",
+    "surfaceAlt": "#2F2F2F",
+    "ink": "#FFFFFF",
+    "inkMuted": "#949494",
+    "onPrimary": "#111318"
+  },
+  "semantic": {
+    "success": "#3ED598",
+    "info": "#3CBCFF",
+    "warning": "#F5C15C",
+    "highlightRow": "rgba(60,188,255,0.14)",
+    "terminalBg": "#0C0C0C",
+    "terminalFg": "#B1E4FF"
+  },
+  "typography": {
+    "body": "-apple-system, system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 14
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(60,255,208,0.22), transparent 55%), linear-gradient(160deg, #131313 0%, #172B26 60%, #131313 100%)",
+    "headerBg": "linear-gradient(90deg, #309875, #31A480)",
+    "footerBg": "linear-gradient(90deg, #309875, #31A480)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(60,188,255,0.08), transparent 40%), radial-gradient(circle at 10% 90%, rgba(60,255,208,0.22), transparent 45%), #131313",
+    "subtitleBg": "rgba(10,10,10,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "THEVERGE"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

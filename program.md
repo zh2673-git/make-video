@@ -4,6 +4,7 @@
 > 运行模式：**生产**（产出完整文档树 docs/01~07 + 测试报告）。
 > 用户确认决定：运行模式=生产；技术栈=沿用 Python3.11+Remotion+edge-tts+ffmpeg；时空契约=按草稿；工具形态=CLI + skill 化；主题系统=双源头（awesome-design-md 移植 / canvas-design 原创）。
 > 2026-09-25 增量：v0.0.2 新增**自动分镜（compose）**与**动效变体池（variants）**，研究方向第 3 条落地。
+> 2026-09-25 增量：v0.0.3 新增 **import-themes 批量移植**，主题库扩至 79 套（74 份 awesome-design-md 全量），研究方向第 2 条核心落地（转换规则产品化为确定性算法）。
 
 ## 项目目标
 
@@ -84,7 +85,7 @@ title（片头）/ bullets（要点）/ flow（流程）/ table（表格）/ pan
 ## 研究方向（优先级）
 
 1. 主题 token schema 的粒度设计（token 过粗→风格趋同，过细→主题库难维护）；组件与 token 的消费契约。
-2. DESIGN.md → theme.json 转换规则：9 章节 Web 语义到视频画布的映射（过滤交互态/响应式，阴影转层次，字体层级转字幕层级）；第 10 节 Motion & Video Rules 的 token 化。
+2. DESIGN.md → theme.json 转换规则：9 章节 Web 语义到视频画布的映射（过滤交互态/响应式，阴影转层次，字体层级转字幕层级）；第 10 节 Motion & Video Rules 的 token 化。**核心已落地（v0.0.3）**：`import-themes` 将转换规则产品化（frontmatter/散文双路径解析 + 色彩数学兜底），74 份上游模板全量移植；剩余课题为导入草稿的逐套精调。
 3. ~~Remotion 组件库扩展：6 个新分镜类型的动效规范与主题适配~~ **已落地（v0.0.2）**：12 型组件全量实现，动效变体池（variants 轮换）补齐主题适配维度。
 4. 主题试帧管线（单组合多样例帧低成本渲染）与 preview 体验。
 5. 自动分镜启发式的泛化（新）：当前规则链首中即停，中文技术类文本命中率高；后续探索 LLM 辅助分镜决策——保持 DSL 契约不变，仅替换 composer 决策层。

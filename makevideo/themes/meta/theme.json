@@ -1,0 +1,93 @@
+{
+  "name": "meta",
+  "version": 1,
+  "source": "ported/awesome-design-md:meta",
+  "desc": "Meta's design system spans hardware commerce (Quest VR,",
+  "palette": {
+    "primary": "#0064E0",
+    "primaryDark": "#0457CB",
+    "primaryLight": "#2E80E6",
+    "accent": "#1F00E0",
+    "accentSoft": "#B1A6F4",
+    "surface": "#FFFFFF",
+    "surfaceCard": "#F1F4F7",
+    "surfaceAlt": "#E4E4E4",
+    "ink": "#1C1E21",
+    "inkMuted": "#7B7C7E",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#31A24C",
+    "info": "#1F00E0",
+    "warning": "#F7B928",
+    "highlightRow": "#C7BFF7",
+    "terminalBg": "#1A1A2E",
+    "terminalFg": "#EAEAEA"
+  },
+  "typography": {
+    "body": "\"ss01\", system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 10
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(0,100,224,0.1), transparent 55%), linear-gradient(160deg, #FFFFFF 0%, #E6F0FC 60%, #FFFFFF 100%)",
+    "headerBg": "linear-gradient(90deg, #F1F4F7, #D4E3F4)",
+    "footerBg": "linear-gradient(90deg, #F1F4F7, #D4E3F4)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(31,0,224,0.14), transparent 40%), radial-gradient(circle at 10% 90%, rgba(0,100,224,0.1), transparent 45%), #FFFFFF",
+    "subtitleBg": "rgba(128,128,128,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "META"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

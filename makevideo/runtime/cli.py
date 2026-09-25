@@ -41,6 +41,11 @@ def main(argv=None) -> int:
 
     sub.add_parser("list-themes", help="列出主题库")
 
+    pi = sub.add_parser("import-themes", help="awesome-design-md 批量移植：DESIGN.md → 主题库")
+    pi.add_argument("repo", help="design-md 目录（含 <模板>/DESIGN.md 子目录）")
+    pi.add_argument("--only", help="仅导入指定 slug（逗号分隔）")
+    pi.add_argument("--force", action="store_true", help="覆盖同名主题")
+
     a = p.parse_args(argv)
     try:
         if a.cmd == "build":
@@ -57,6 +62,10 @@ def main(argv=None) -> int:
         elif a.cmd == "list-themes":
             themes = list_themes()
             print("\n".join(themes) if themes else "(主题库为空)")
+        elif a.cmd == "import-themes":
+            from makevideo.application.pipeline import import_themes
+            only = {x.strip() for x in a.only.split(",") if x.strip()} if a.only else None
+            import_themes(a.repo, only=only, force=a.force)
     except MakeVideoError as e:
         print(f"[STOP] {e}", file=sys.stderr)
         return int(e.code[1]) if e.code[1:].isdigit() else 1

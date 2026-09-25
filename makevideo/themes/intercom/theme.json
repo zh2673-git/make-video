@@ -1,0 +1,93 @@
+{
+  "name": "intercom",
+  "version": 1,
+  "source": "ported/awesome-design-md:intercom",
+  "desc": "An editorial customer-service marketing canvas built around",
+  "palette": {
+    "primary": "#111111",
+    "primaryDark": "#0C0C0C",
+    "primaryLight": "#3C3C3C",
+    "accent": "#111111",
+    "accentSoft": "#ACACAC",
+    "surface": "#F5F1EC",
+    "surfaceCard": "#FFFFFF",
+    "surfaceAlt": "#EBE7E1",
+    "ink": "#111111",
+    "inkMuted": "#626260",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#0BDF50",
+    "info": "#111111",
+    "warning": "#B7791F",
+    "highlightRow": "#C4C4C4",
+    "terminalBg": "#1A1A2E",
+    "terminalFg": "#EAEAEA"
+  },
+  "typography": {
+    "body": "\"Saans Fallback\", \"ui-sans-serif\", system-ui, system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 12
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(17,17,17,0.1), transparent 55%), linear-gradient(160deg, #F5F1EC 0%, #DEDBD6 60%, #F5F1EC 100%)",
+    "headerBg": "linear-gradient(90deg, #FFFFFF, #E2E2E2)",
+    "footerBg": "linear-gradient(90deg, #FFFFFF, #E2E2E2)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(17,17,17,0.14), transparent 40%), radial-gradient(circle at 10% 90%, rgba(17,17,17,0.1), transparent 45%), #F5F1EC",
+    "subtitleBg": "rgba(122,120,118,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "INTERCOM"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "name": "figma",
+  "version": 1,
+  "source": "ported/awesome-design-md:figma",
+  "desc": "A confident black-and-white editorial frame interrupted by",
+  "palette": {
+    "primary": "#000000",
+    "primaryDark": "#000000",
+    "primaryLight": "#2E2E2E",
+    "accent": "#FF3D8B",
+    "accentSoft": "#FFBBD6",
+    "surface": "#FFFFFF",
+    "surfaceCard": "#F7F7F5",
+    "surfaceAlt": "#E0E0E0",
+    "ink": "#000000",
+    "inkMuted": "#6B6B6B",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#1EA64A",
+    "info": "#FF3D8B",
+    "warning": "#B7791F",
+    "highlightRow": "#FFCEE2",
+    "terminalBg": "#1A1A2E",
+    "terminalFg": "#EAEAEA"
+  },
+  "typography": {
+    "body": "\"figmaSans Fallback\", \"SF Pro Display\", system-ui, system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 20
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(0,0,0,0.1), transparent 55%), linear-gradient(160deg, #FFFFFF 0%, #E6E6E6 60%, #FFFFFF 100%)",
+    "headerBg": "linear-gradient(90deg, #F7F7F5, #D9D9D8)",
+    "footerBg": "linear-gradient(90deg, #F7F7F5, #D9D9D8)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(255,61,139,0.14), transparent 40%), radial-gradient(circle at 10% 90%, rgba(0,0,0,0.1), transparent 45%), #FFFFFF",
+    "subtitleBg": "rgba(128,128,128,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "FIGMA"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

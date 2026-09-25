@@ -1,0 +1,93 @@
+{
+  "name": "warp",
+  "version": 1,
+  "source": "ported/awesome-design-md:warp",
+  "desc": "An inspired interpretation of Warp's design language — an",
+  "palette": {
+    "primary": "#F7F5F0",
+    "primaryDark": "#B2B0AD",
+    "primaryLight": "#F8F7F3",
+    "accent": "#F5F7F0",
+    "accentSoft": "#FCFCFA",
+    "surface": "#2B2622",
+    "surfaceCard": "#37322E",
+    "surfaceAlt": "#433F3B",
+    "ink": "#F7F5F0",
+    "inkMuted": "#AEA69C",
+    "onPrimary": "#2B2622"
+  },
+  "semantic": {
+    "success": "#3ED598",
+    "info": "#F5F7F0",
+    "warning": "#F5C15C",
+    "highlightRow": "rgba(245,247,240,0.14)",
+    "terminalBg": "#1C1916",
+    "terminalFg": "#FBFCF9"
+  },
+  "typography": {
+    "body": "\"--font-dm-mono\", system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 10
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(247,245,240,0.22), transparent 55%), linear-gradient(160deg, #2B2622 0%, #3F3B37 60%, #2B2622 100%)",
+    "headerBg": "linear-gradient(90deg, #37322E, #4E4945)",
+    "footerBg": "linear-gradient(90deg, #37322E, #4E4945)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(245,247,240,0.08), transparent 40%), radial-gradient(circle at 10% 90%, rgba(247,245,240,0.22), transparent 45%), #2B2622",
+    "subtitleBg": "rgba(22,19,17,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "WARP"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

@@ -25,7 +25,7 @@
     "terminalFg": "#EAEAEA"
   },
   "typography": {
-    "body": 34,
+    "body": "\"Source Han Serif SC\", \"Noto Serif SC\", \"SimSun\", system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
     "mono": "Consolas, \"Courier New\", monospace",
     "display": 110,
     "title": 88,

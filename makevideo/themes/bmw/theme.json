@@ -1,0 +1,93 @@
+{
+  "name": "bmw",
+  "version": 1,
+  "source": "ported/awesome-design-md:bmw",
+  "desc": "BMW's corporate site — distinct from BMW M's",
+  "palette": {
+    "primary": "#1C69D4",
+    "primaryDark": "#144C99",
+    "primaryLight": "#4584DC",
+    "accent": "#3A1CD4",
+    "accentSoft": "#BAB0F0",
+    "surface": "#FFFFFF",
+    "surfaceCard": "#F2F2F2",
+    "surfaceAlt": "#EBEBEB",
+    "ink": "#262626",
+    "inkMuted": "#6B6B6B",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#22C55E",
+    "info": "#3A1CD4",
+    "warning": "#F59E0B",
+    "highlightRow": "#CEC6F4",
+    "terminalBg": "#1A1A2E",
+    "terminalFg": "#EAEAEA"
+  },
+  "typography": {
+    "body": "system-ui, -apple-system, \"BlinkMacSystemFont\", system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 12
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(28,105,212,0.1), transparent 55%), linear-gradient(160deg, #FFFFFF 0%, #E8F0FB 60%, #FFFFFF 100%)",
+    "headerBg": "linear-gradient(90deg, #F2F2F2, #D8E2EE)",
+    "footerBg": "linear-gradient(90deg, #F2F2F2, #D8E2EE)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(58,28,212,0.14), transparent 40%), radial-gradient(circle at 10% 90%, rgba(28,105,212,0.1), transparent 45%), #FFFFFF",
+    "subtitleBg": "rgba(128,128,128,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "BMW"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

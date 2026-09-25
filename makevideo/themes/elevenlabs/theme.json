@@ -1,0 +1,93 @@
+{
+  "name": "elevenlabs",
+  "version": 1,
+  "source": "ported/awesome-design-md:elevenlabs",
+  "desc": "A voice-AI brand whose marketing surfaces read like a",
+  "palette": {
+    "primary": "#292524",
+    "primaryDark": "#1E1B1A",
+    "primaryLight": "#504C4B",
+    "accent": "#292824",
+    "accentSoft": "#B4B4B2",
+    "surface": "#F5F5F5",
+    "surfaceCard": "#FFFFFF",
+    "surfaceAlt": "#F0EFED",
+    "ink": "#0C0A09",
+    "inkMuted": "#777169",
+    "onPrimary": "#FFFFFF"
+  },
+  "semantic": {
+    "success": "#16A34A",
+    "info": "#292824",
+    "warning": "#B7791F",
+    "highlightRow": "#CAC9C8",
+    "terminalBg": "#1A1A2E",
+    "terminalFg": "#EAEAEA"
+  },
+  "typography": {
+    "body": "\"Times New Roman\", serif, system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 12
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(41,37,36,0.1), transparent 55%), linear-gradient(160deg, #F5F5F5 0%, #E1E0E0 60%, #F5F5F5 100%)",
+    "headerBg": "linear-gradient(90deg, #FFFFFF, #E5E5E5)",
+    "footerBg": "linear-gradient(90deg, #FFFFFF, #E5E5E5)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(41,40,36,0.14), transparent 40%), radial-gradient(circle at 10% 90%, rgba(41,37,36,0.1), transparent 45%), #F5F5F5",
+    "subtitleBg": "rgba(122,122,122,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "ELEVENLABS"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

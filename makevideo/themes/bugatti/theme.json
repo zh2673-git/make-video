@@ -1,0 +1,93 @@
+{
+  "name": "bugatti",
+  "version": 1,
+  "source": "ported/awesome-design-md:bugatti",
+  "desc": "An austere luxury-automotive interface that uses near-pure",
+  "palette": {
+    "primary": "#FFFFFF",
+    "primaryDark": "#B8B8B8",
+    "primaryLight": "#FFFFFF",
+    "accent": "#C3D9F3",
+    "accentSoft": "#EAF2FB",
+    "surface": "#000000",
+    "surfaceCard": "#141414",
+    "surfaceAlt": "#0D0D0D",
+    "ink": "#FFFFFF",
+    "inkMuted": "#999999",
+    "onPrimary": "#000000"
+  },
+  "semantic": {
+    "success": "#5FA657",
+    "info": "#C3D9F3",
+    "warning": "#D4A017",
+    "highlightRow": "rgba(195,217,243,0.14)",
+    "terminalBg": "#000000",
+    "terminalFg": "#E7F0FA"
+  },
+  "typography": {
+    "body": "-apple-system, \"BlinkMacSystemFont\", \"Segoe UI\", system-ui, \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
+    "mono": "\"JetBrains Mono\", ui-monospace, Consolas, \"Courier New\", monospace",
+    "display": 116,
+    "title": 90,
+    "header": 50,
+    "h1": 42,
+    "h2": 36,
+    "bodySize": 32,
+    "caption": 28,
+    "micro": 24
+  },
+  "motion": {
+    "entranceSpring": {
+      "damping": 120,
+      "stiffness": 105
+    },
+    "stagger": 9,
+    "tableRowDelay": 6,
+    "fadeFrames": 12
+  },
+  "layout": {
+    "safeX": 96,
+    "contentTop": 150,
+    "contentBottom": 148,
+    "headerHeight": 108,
+    "footerHeight": 54,
+    "subtitleBottom": 84,
+    "subtitleMaxWidth": 1500,
+    "radius": 14
+  },
+  "brand": {
+    "coverBg": "radial-gradient(circle at 50% 32%, rgba(255,255,255,0.22), transparent 55%), linear-gradient(160deg, #000000 0%, #1A1A1A 60%, #000000 100%)",
+    "headerBg": "linear-gradient(90deg, #141414, #303030)",
+    "footerBg": "linear-gradient(90deg, #141414, #303030)",
+    "contentBg": "radial-gradient(circle at 85% 10%, rgba(195,217,243,0.08), transparent 40%), radial-gradient(circle at 10% 90%, rgba(255,255,255,0.22), transparent 45%), #000000",
+    "subtitleBg": "rgba(0,0,0,0.7)",
+    "subtitleColor": "#FFFFFF",
+    "serialLabel": "BUGATTI"
+  },
+  "variants": {
+    "bullets": [
+      "slide",
+      "rise"
+    ],
+    "flow": [
+      "scale",
+      "rise"
+    ],
+    "table": [
+      "cascade",
+      "fade"
+    ],
+    "quote": [
+      "mark",
+      "rise"
+    ],
+    "compare": [
+      "slide",
+      "fade"
+    ],
+    "timeline": [
+      "line",
+      "pulse"
+    ]
+  }
+}

@@ -25,7 +25,7 @@
     "terminalFg": "#D7E4D0"
   },
   "typography": {
-    "body": 36,
+    "body": "\"Comic Sans MS\", \"Segoe Print\", \"PingFang SC\", \"Microsoft YaHei\", system-ui, sans-serif",
     "mono": "\"Cascadia Code\", Consolas, monospace",
     "display": 116,
     "title": 90,
