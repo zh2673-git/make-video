@@ -2,7 +2,17 @@
 
 讲稿驱动的微视频生成工具：一份 Markdown 讲稿 + 一个风格主题 → 一键输出 1080P MP4，零人工剪辑。
 
-![makevideo 一分钟介绍（本工具全自动生成）](https://github.com/zh2673-git/make-video/releases/download/v0.0.4/demo-68s.mp4)
+## 双模式示范（同一份旁白，两种画面实现）
+
+**创意模式** `mode: "creative"`——每镜画面由 LLM 为内容定制，无固定版式套路（推荐）：
+
+<video controls muted width="100%" src="https://github.com/zh2673-git/make-video/releases/download/v0.0.7/creative-60s.mp4"></video>
+
+**规则模式** `mode: "rule"`——13 型预制版式直接消费，稳定快出：
+
+<video controls muted width="100%" src="https://github.com/zh2673-git/make-video/releases/download/v0.0.7/rule-60s.mp4"></video>
+
+两片旁白逐字相同、时长完全一致（53.7s）——画面实现与时间轴层彻底解耦；创意片每镜对应工程 `scenes/<场景名>.tsx`（弹入封面 / 生长管线 / 非对称数字面 / 打字机终端 / 色板矩阵扫光 / 公式片尾），规则片为 title / flow / stat / code / quote / ending。
 
 > 本项目由 [project-dev-skill](https://github.com/zh2673-git/project-dev-skill)（时空运行时项目开发方法论）驱动开发：以空间/时间/规则三公理推导架构，以 P/Q/I 验证契约驱动实现与测试。完整方案与文档见 [program.md](program.md) 与 [docs/](docs/)。
 
@@ -169,13 +179,14 @@ python -m makevideo import-themes awesome-design-md/design-md
 
 **动效变体池**（可选段 `variants`）：7 个常用版式（bullets / flow / stat / table / quote / compare / timeline）各配入场动效池，组件按同版式出现序号轮换、相邻分镜不重复——同一条片里每次出现的版式动效不再雷同。缺省该段即用各版式默认动效，旧主题零改动兼容；变体仅动效维度，布局与色彩 token 不变。
 
-## 演示视频
+## 示范工程
 
-**《makevideo 一分钟介绍》**（67.8s，techdark 主题）已嵌入本 README 顶部，由 `projects/makevideo-一分钟介绍/` 讲稿一键生成（含图标要点与 stat 数字版式），release 附件直达：[demo-68s.mp4](https://github.com/zh2673-git/make-video/releases/download/v0.0.4/demo-68s.mp4)。
+两支示范片（见 README 顶部内嵌）来自同一段旁白的两个工程，可直接复用体验：
 
-**《makevideo 使用指南》**（2.6 分钟，techdark 主题）——进阶版动态说明书，由 `projects/makevideo-使用指南/` 讲稿一键生成，也是"以工具介绍工具"的端到端示例：修改该工程的讲稿后重跑 build，即可体验完整出片流程。
+- `projects/makevideo-创意一分钟/`：创意模式——讲稿 + 6 个场景代码（`scenes/*.tsx`），`build` 前自动过 E8 三道闸（import 白名单 / tsc / 逐镜试帧）。
+- `projects/makevideo-规则一分钟/`：规则模式——纯讲稿，6 型预制版式，零代码。
 
-▶ [观看《makevideo 使用指南》演示视频（2.6 分钟）](assets/demo.mp4)
+修改任一工程的讲稿（或场景代码）后重跑 `python -m makevideo build <工程>`，即可体验完整出片流程。
 
 ## 设计文档
 
