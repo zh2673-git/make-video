@@ -1,0 +1,6 @@
+{
+  "name": "makevideo-创意一分钟",
+  "mode": "creative",
+  "theme": "techdark",
+  "output": "out/creative-60s.mp4"
+}

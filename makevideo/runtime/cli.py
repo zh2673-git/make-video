@@ -20,7 +20,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="makevideo", description="讲稿驱动的多风格微视频生成工具")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    pb = sub.add_parser("build", help="讲稿+主题 → 1080P MP4")
+    pb = sub.add_parser("build", help="讲稿+主题 → 1080P MP4（mode=rule 走 13 型预制件 / mode=creative 走工程 scenes/ 场景代码）")
     pb.add_argument("project", help="工程目录（含 project.json + 讲稿）")
     pb.add_argument("--only", help="分段增量渲染：仅重渲指定分镜（逗号分隔 id）")
     pb.add_argument("--no-tts", action="store_true", help="复用现有配音")
@@ -31,7 +31,7 @@ def main(argv=None) -> int:
     pp.add_argument("theme", help="主题名")
     pp.add_argument("--out", help="输出目录（默认 makevideo/preview/<theme>）")
 
-    pv = sub.add_parser("validate", help="校验工程（DSL+主题），不出片")
+    pv = sub.add_parser("validate", help="校验工程（DSL+主题；创意模式含场景装载/白名单/tsc），不出片")
     pv.add_argument("project", help="工程目录")
 
     pc = sub.add_parser("compose", help="纯文本讲稿 → 自动分镜讲稿.md（草稿，微调后 build）")

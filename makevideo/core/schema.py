@@ -4,6 +4,8 @@
 Scene 为 dict（与 engine/src/SceneTypes.ts 对偶，TS 侧编译期守门）；
 Python 侧由 validate_scenes / validate_theme 在运行时拦截越界。
 """
+import re
+
 from makevideo.core.errors import SchemaError, ThemeError
 
 # 分镜类型枚举（组件映射表见 engine/src/MicroCourse.tsx，一一对应）
@@ -56,9 +58,17 @@ THEME_VARIANT_TYPES = {"bullets", "flow", "table", "quote", "compare", "timeline
 _STR_FIELDS = {"id", "type", "title", "narration", "highlight", "note", "quote",
                "attribution", "lang", "image", "imageNote", "leftTitle", "rightTitle"}
 
+# 创意模式场景名：小写字母开头，小写字母/数字/连字符（对应工程 scenes/<名>.tsx）
+_CREATIVE_NAME_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 
-def validate_scenes(scenes: list) -> None:
-    """分镜 DSL 运行时校验，违规即 SchemaError（E2，stop 前置拦截）。"""
+
+def validate_scenes(scenes: list, mode: str = "rule") -> None:
+    """分镜 DSL 运行时校验，违规即 SchemaError（E2，stop 前置拦截）。
+
+    mode=rule：type 必须在 13 型枚举内（预制件层）。
+    mode=creative：type 即创意场景名——必须匹配场景名规则且**不得**落在 13 型枚举内
+    （片级二选一：防逐镜混用让 LLM 偷懒回退规则版式）。
+    """
     if not scenes:
         raise SchemaError("讲稿解析结果为空：未找到任何 SCENE 块")
     ids, errs = set(), []
@@ -71,11 +81,17 @@ def validate_scenes(scenes: list) -> None:
             errs.append(f"{where}: id 重复")
         else:
             ids.add(sid)
-        if s.get("type") not in SCENE_TYPES:
-            errs.append(f"{where}: type '{s.get('type')}' 不在枚举 {sorted(SCENE_TYPES)}")
+        stype = s.get("type")
+        if mode == "creative":
+            if stype in SCENE_TYPES:
+                errs.append(f"{where}: 创意模式不允许规则版式 '{stype}'（片级二选一，全部场景须为自定义场景代码）")
+            elif not (isinstance(stype, str) and _CREATIVE_NAME_RE.match(stype)):
+                errs.append(f"{where}: 创意场景名 '{stype}' 非法（需小写字母开头，仅小写字母/数字/连字符，对应 scenes/<名>.tsx）")
+        elif stype not in SCENE_TYPES:
+            errs.append(f"{where}: type '{stype}' 不在枚举 {sorted(SCENE_TYPES)}（若为创意场景，请在 project.json 设 \"mode\": \"creative\"）")
         if not (s.get("narration") or "").strip():
             errs.append(f"{where}: narration 为空")
-        for field in REQUIRED_FIELDS.get(s.get("type"), ()):
+        for field in REQUIRED_FIELDS.get(stype if mode == "rule" else None, ()):
             v = s.get(field)
             if not v or (isinstance(v, (list, dict)) and not v):
                 errs.append(f"{where}: type={s['type']} 缺少必备字段 {field}")

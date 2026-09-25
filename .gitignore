@@ -24,5 +24,9 @@ makevideo/engine/src/meta.gen.json
 makevideo/engine/src/scenes.gen.json
 makevideo/engine/src/theme.gen.json
 
+# 创意场景装载拷贝（build 时从工程 scenes/ 重写；注册表 custom.gen.ts 空表初版入库）
+makevideo/engine/src/custom/
+makevideo/engine/debug.log
+
 # 本地开发方法论文件（不上传）
 project-development-prompt.md

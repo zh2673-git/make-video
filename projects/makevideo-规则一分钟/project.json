@@ -1,0 +1,6 @@
+{
+  "name": "makevideo-规则一分钟",
+  "mode": "rule",
+  "theme": "techdark",
+  "output": "out/rule-60s.mp4"
+}

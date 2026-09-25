@@ -9,9 +9,10 @@
 ## 特性
 
 - **讲稿进、成片出**：配音、帧对齐、渲染、拼接全链路自动化，人只负责写讲稿。
+- **双模式画面实现（v0.0.6）**：`mode=rule` 走 13 型预制版式，稳定快出；`mode=creative` 每镜画面由 LLM 写 Remotion 场景代码（`scenes/*.tsx`），为内容定制构图与动效，配 tsc + import 白名单 + 逐镜试帧三道校验闸（E8）。片级二选一，时间轴层完全共享。
 - **自动分镜**：`compose` 分析纯文本讲稿的内容形态（数据/步骤/对比/引语…），自动产出带版式声明的讲稿草稿。
 - **13 种分镜版式**：title / bullets / flow / stat / table / panorama / ending / quote / compare / timeline / chart / code / image；bullets 支持 `icons:` 图标指令，stat 大数字计数动画。
-- **主题系统**：视觉风格沉淀为 theme.json token，组件零硬编码风格，换主题即换风格、内容零改动。
+- **主题系统**：视觉风格沉淀为 theme.json token，组件零硬编码风格，换主题即换风格、内容零改动；79 套主题（含 awesome-design-md 全量移植）对创意模式同样生效。
 - **动效变体池**：7 个常用版式各配入场动效池，按分镜顺序轮换、相邻不重复，消除机械感。
 - **增量渲染**：`--only` 只重画改动的分镜，其余片段缓存复用，无损拼接。
 - **词级时间戳对齐**：TTS 词级时间戳驱动帧数换算与字幕帧窗，音画逐句对齐。
@@ -27,9 +28,9 @@ styles/DESIGN.md ──→ themes/theme.json（AI 转换 + 人审试帧定稿）
 
 | 层 | 目录 | 职责 |
 |---|---|---|
-| core | `makevideo/core/` | DSL schema、主题契约、错误码（E1~E6） |
+| core | `makevideo/core/` | DSL schema、主题契约、错误码（E1~E8） |
 | domain | `makevideo/domain/` | 讲稿解析、字幕切句、帧对齐（纯函数） |
-| infrastructure | `makevideo/infrastructure/` | edge-tts、Remotion 调用、ffmpeg 拼接、主题 IO |
+| infrastructure | `makevideo/infrastructure/` | edge-tts、Remotion 调用、ffmpeg 拼接、主题 IO、创意场景装载校验 |
 | application | `makevideo/application/` | 出片用例编排（全量 / 增量 / 试帧） |
 | runtime | `makevideo/runtime/` | CLI 入口（init/start/stop/destroy 生命周期映射） |
 | engine | `makevideo/engine/` | Remotion 组件库 + 主题消费层 |
@@ -104,6 +105,15 @@ note: 表格下方的备注
 | ending | 片尾致谢 | — |
 
 meta 可写在讲稿内嵌注释或 project.json（后者优先）：`voice` / `rate` / `unit` / `author` / `compliance` / `footer`。
+
+## 双模式（规则 / 创意）
+
+`project.json` 的 `"mode"` 字段控制画面实现方式，**片级二选一**：
+
+- **`"rule"`（缺省）**：type 位写 13 型版式名，画面由预制组件渲染——稳定快出，接受版式单调。适合批量生产、信息陈列类内容。
+- **`"creative"`**：type 位写自定义场景名，每个场景对应工程 `scenes/<场景名>.tsx`（LLM 按内容理解写 Remotion 代码，如打字机终端、生长管线、非对称数字面）——画面与内容深度绑定，无固定版式套路。
+
+创意模式的三道校验闸（E8，失败即停并附定位信息）：import 白名单（禁文件系统/网络/任意 npm 包）→ tsc 编译（engine strict 全量）→ 逐镜试帧（内容变更后自动重试）。场景代码消费主题 CSS 变量与 `primitives.tsx` 画笔（入场/计数/错峰/图标），79 套主题即换即生效。详见根目录 `SKILL.md` 创作引导。
 
 ## 自动分镜（compose）
 

@@ -14,7 +14,7 @@ from makevideo.domain.composer import compose_script as compose_draft
 from makevideo.domain.composer import render_markdown
 from makevideo.domain.parser import parse_script
 from makevideo.domain.timeline import FPS, TAIL_FRAMES, align_timeline
-from makevideo.infrastructure import renderer, tts
+from makevideo.infrastructure import renderer, sceneio, tts
 from makevideo.infrastructure.themeio import load_theme
 
 PKG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -52,6 +52,7 @@ def load_project(project_dir: str) -> dict:
     cfg.setdefault("name", os.path.basename(os.path.abspath(project_dir)))
     cfg.setdefault("script", "讲稿.md")
     cfg.setdefault("theme", "govgold")
+    cfg.setdefault("mode", "rule")  # 双模式：rule=13 型预制件 / creative=LLM 场景代码（片级二选一）
     cfg.setdefault("meta", {})
     cfg.setdefault("output", f"out/{cfg['name']}.mp4")
     script_path = os.path.join(project_dir, cfg["script"])
@@ -73,12 +74,19 @@ def _write_gen(theme: dict, meta: dict, scenes: list) -> None:
 def build(project_dir: str, only: set | None = None, skip_tts: bool = False,
           skip_render: bool = False, theme_override: str | None = None) -> dict:
     """出片主用例。返回统计信息。"""
-    # ---- init：解析 + 校验（空间开辟） ----
+    # ---- init：解析 + 校验（空间开辟）；创意模式先装载场景代码（E8 三道闸在 TTS 之前拦截） ----
     cfg = load_project(project_dir)
+    mode = cfg["mode"]
     meta, scenes = parse_script(cfg["_script_path"], overrides=cfg["meta"])
-    validate_scenes(scenes)
+    validate_scenes(scenes, mode=mode)
     theme = load_theme(theme_override or cfg["theme"])
     os.makedirs(AUDIO_DIR, exist_ok=True)
+    content_hash = ""
+    if mode == "creative":
+        files = sceneio.collect_scene_files(cfg["_project_dir"], [s["type"] for s in scenes])
+        content_hash = sceneio.deploy_custom_scenes(files)
+        sceneio.tsc_check()
+        print(f"[SCENE] 创意场景装载 x{len(files)}（import 白名单 + tsc 通过）")
 
     # ---- start：TTS + 帧对齐（时间流启动） ----
     tts_cache = os.path.join(cfg["_project_dir"], "gen", "tts.json")
@@ -98,6 +106,10 @@ def build(project_dir: str, only: set | None = None, skip_tts: bool = False,
     total = align_timeline(scenes, FPS, TAIL_FRAMES)
     _write_gen(theme, meta, scenes)
     print(f"[OK] scenes.gen.json：{len(scenes)} 分镜，总时长 {total / FPS:.1f}s（{total / FPS / 60:.1f} 分钟）")
+
+    # ---- 校验闭环第三道闸：创意模式逐镜试帧（渲染前快速失败；内容/帧表未变走缓存） ----
+    if mode == "creative":
+        sceneio.check_stills(scenes, content_hash)
 
     # ---- destroy：渲染落盘 ----
     out_rel = cfg["output"].replace("\\", "/")
@@ -122,12 +134,17 @@ def build(project_dir: str, only: set | None = None, skip_tts: bool = False,
 
 
 def validate_project(project_dir: str) -> dict:
-    """仅校验不出片：DSL + 主题 + 工程配置。"""
+    """仅校验不出片：DSL + 主题 + 工程配置；创意模式加场景装载 + import 白名单 + tsc（静态两道闸）。"""
     cfg = load_project(project_dir)
+    mode = cfg["mode"]
     meta, scenes = parse_script(cfg["_script_path"], overrides=cfg["meta"])
-    validate_scenes(scenes)
+    validate_scenes(scenes, mode=mode)
     load_theme(cfg["theme"])
-    return {"project": cfg["name"], "theme": cfg["theme"], "scenes": len(scenes),
+    if mode == "creative":
+        files = sceneio.collect_scene_files(cfg["_project_dir"], [s["type"] for s in scenes])
+        sceneio.deploy_custom_scenes(files)
+        sceneio.tsc_check()
+    return {"project": cfg["name"], "mode": mode, "theme": cfg["theme"], "scenes": len(scenes),
             "types": sorted({s["type"] for s in scenes})}
 
 
@@ -137,7 +154,7 @@ _AI_ROLE = """
 
 ## 当前任务（排版模式——上文的角色边界立即生效）
 
-对下面的人类原文做**排版决策**：分镜切分、版式选择、bullets/stat 图标配置。
+对下面的人类原文做**排版决策**（本任务属规则模式）：分镜切分、版式选择、bullets/stat 图标配置。
 铁律：所有条目与 narration **逐字取自原文**（允许按句切分、允许在 stat 中拆出"值|标签"结构），不增写、不改写、不润色。
 输出完整讲稿.md（含 meta 行与全部 SCENE 块），只输出讲稿本身，不要任何解释、代码围栏或多余文字。"""
 

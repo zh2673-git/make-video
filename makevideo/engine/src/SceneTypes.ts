@@ -9,7 +9,8 @@ export type SceneType =
 
 export type Scene = {
   id: string;
-  type: SceneType;
+  /** 规则模式 = 13 型版式名；创意模式 = 场景名（对应工程 scenes/<名>.tsx，经 custom.gen 注册表挂载）。 */
+  type: string;
   title: string;
   narration: string;
   frames: number;
