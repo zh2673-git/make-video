@@ -6,11 +6,11 @@
 
 **创意模式** `mode: "creative"`——每镜画面由 LLM 为内容定制，无固定版式套路（推荐）：
 
-![创意模式示范片（53.7s）](assets/creative-60s.mp4)
+<video src="https://github.com/user-attachments/assets/025d0c6a-e368-481f-b4fe-c397af7a48ec" controls muted playsinline></video>
 
 **规则模式** `mode: "rule"`——13 型预制版式直接消费，稳定快出：
 
-![规则模式示范片（53.7s）](assets/rule-60s.mp4)
+<video src="https://github.com/user-attachments/assets/d3282f77-9509-4a86-8069-dec32592980a" controls muted playsinline></video>
 
 两片旁白逐字相同、时长完全一致（53.7s）——画面实现与时间轴层彻底解耦；创意片每镜对应工程 `scenes/<场景名>.tsx`（弹入封面 / 生长管线 / 非对称数字面 / 打字机终端 / 色板矩阵扫光 / 公式片尾），规则片为 title / flow / stat / code / quote / ending。
 
