@@ -81,12 +81,13 @@ def parse_script(md_path: str, overrides: dict | None = None):
                         scene["icons"] = [x.strip() for x in val.split(",") if x.strip()]
                     else:
                         scene[field] = val
-        if stype in ("table", "panorama", "chart") and rows:
-            scene["header"], scene["rows"] = rows[0], rows[1:]
-        elif stype == "stat" and rows:  # 每行 值|标签[|图标]
-            scene["stats"] = rows
-        elif stype == "compare" and rows:  # compare 亦可用表格行（左|右）
-            scene["pairs"] = rows
+        if rows:
+            if stype == "stat":  # 每行 值|标签[|图标]
+                scene["stats"] = rows
+            elif stype == "compare":  # compare 亦可用表格行（左|右）
+                scene["pairs"] = rows
+            else:  # 规则表类型与创意场景通用：表格行不再按版式名过滤（创意场景同样消费 header/rows）
+                scene["header"], scene["rows"] = rows[0], rows[1:]
         elif bullets:
             scene["bullets"] = bullets
         if subs:
