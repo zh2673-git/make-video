@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.tsbuildinfo
+projects/
+gen-scenes/
+gen-scenes-intro/
+.codebuddy/
+.DS_Store
+Thumbs.db

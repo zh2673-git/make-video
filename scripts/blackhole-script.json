@@ -1,0 +1,621 @@
+{
+  "fullText": "宇宙中有一种天体，连光都无法从它身边逃脱。它不发光，不反射，却能让经过它的一切改变方向，甚至连时间都要为它放慢脚步。这就是黑洞，宇宙中最极端、最神秘的存在。它也是当今物理学面临的最大挑战之一。黑洞的本质，是引力获得了彻底的胜利。当物质被压缩进极小的体积，引力会强到扭曲周围的空间和时间。它的边界叫做事件视界，一旦越过这条线，包括光在内的一切，都再也无法回到外面的世界。对外部观测者而言，黑洞就是一个绝对孤独的深渊。在视界之内，物理定律被逼到极限。靠近黑洞的物质会被拉成细长的面条，时间流速被无限放慢。对外面的观察者来说，一个掉进黑洞的物体，会永远凝固在视界表面，仿佛时间停止。这些并非想象，而是爱因斯坦方程的直接推论。黑洞大多诞生于恒星的死亡。一颗质量超过太阳二十倍的恒星，靠核聚变产生的向外辐射压，对抗自身巨大的引力，熊熊燃烧上千万年。而当燃料终于耗尽，这场持续千万年的对抗，会在瞬间戛然而止。引力与辐射压的千万年战争，就此分出胜负。失去支撑的核心以极高的速度向内坍缩，外层则以超新星爆发的形式被狠狠炸向宇宙空间。如果剩下的核心质量仍然超过太阳的三倍，就再也没有任何已知力量能够阻止它，物质被无限压缩成一个密度无穷大的奇点，黑洞就此诞生。整个过程，只需要不到一秒钟。黑洞大致分为两类。恒星坍缩形成的小型黑洞，质量是太阳的几倍到几十倍；而在几乎所有大星系的中心，都坐着一个质量是太阳数百万甚至数十亿倍的超大质量黑洞，它们掌控着整个星系的演化。它们甚至决定着所在星系能容纳多少恒星。在银河系的中心，就潜伏着一个质量相当于四百三十万个太阳的巨人。天文学家通过长期追踪它周围恒星的运动轨迹，并最终拍到了它阴影的照片，从而验证了爱因斯坦百年多前的预言。那张照片，是人类第一次亲眼看见黑洞的样子。所以，黑洞并不是宇宙的毁灭者，而是引力书写的一个极端答案。它吞掉物质，也点亮类星体；它让光沉默，也让我们得以窥见宇宙最深的规律。理解黑洞，就是理解引力的终极浪漫。而宇宙的奥秘，才刚刚揭开一角。",
+  "segments": [
+    {
+      "id": "seg-01",
+      "text": "宇宙中有一种天体，",
+      "function": "emotion",
+      "beat": "hook",
+      "mood": "neutral",
+      "emphasis": [
+        "宇宙中有",
+        "一种天体"
+      ]
+    },
+    {
+      "id": "seg-02",
+      "text": "连光都无法从它身边逃脱。",
+      "function": "emotion",
+      "beat": "hook",
+      "mood": "tense",
+      "emphasis": [
+        "连光都无",
+        "法从它身"
+      ]
+    },
+    {
+      "id": "seg-03",
+      "text": "它不发光，不反射，",
+      "function": "emotion",
+      "beat": "hook",
+      "mood": "awe",
+      "emphasis": [
+        "它不发光",
+        "不反射"
+      ]
+    },
+    {
+      "id": "seg-04",
+      "text": "却能让经过它的一切改变方向，",
+      "function": "emotion",
+      "beat": "hook",
+      "mood": "curious",
+      "emphasis": [
+        "却能让经",
+        "过它的一"
+      ]
+    },
+    {
+      "id": "seg-05",
+      "text": "甚至连时间都要为它放慢脚步。",
+      "function": "emotion",
+      "beat": "hook",
+      "mood": "neutral",
+      "emphasis": [
+        "甚至连时",
+        "间都要为"
+      ]
+    },
+    {
+      "id": "seg-06",
+      "text": "这就是黑洞，宇宙中最极端、最神秘的存在。",
+      "function": "emotion",
+      "beat": "hook",
+      "mood": "tense",
+      "emphasis": [
+        "这就是黑",
+        "宇宙中最"
+      ]
+    },
+    {
+      "id": "seg-07",
+      "text": "它也是当今物理学面临的最大挑战之一。",
+      "function": "emotion",
+      "beat": "hook",
+      "mood": "awe",
+      "emphasis": [
+        "它也是当",
+        "今物理学"
+      ]
+    },
+    {
+      "id": "seg-08",
+      "text": "黑洞的本质，是引力获得了彻底的胜利。",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "curious",
+      "emphasis": [
+        "黑洞的本",
+        "是引力获"
+      ]
+    },
+    {
+      "id": "seg-09",
+      "text": "当物质被压缩进极小的体积，",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "neutral",
+      "emphasis": [
+        "当物质被",
+        "压缩进极"
+      ]
+    },
+    {
+      "id": "seg-10",
+      "text": "引力会强到扭曲周围的空间和时间。",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "tense",
+      "emphasis": [
+        "引力会强",
+        "到扭曲周"
+      ]
+    },
+    {
+      "id": "seg-11",
+      "text": "它的边界叫做事件视界，",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "awe",
+      "emphasis": [
+        "它的边界",
+        "叫做事件"
+      ]
+    },
+    {
+      "id": "seg-12",
+      "text": "一旦越过这条线，包括光在内的一切，",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "curious",
+      "emphasis": [
+        "一旦越过",
+        "这条线"
+      ]
+    },
+    {
+      "id": "seg-13",
+      "text": "都再也无法回到外面的世界。",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "neutral",
+      "emphasis": [
+        "都再也无",
+        "法回到外"
+      ]
+    },
+    {
+      "id": "seg-14",
+      "text": "对外部观测者而言，",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "tense",
+      "emphasis": [
+        "对外部观",
+        "测者而言"
+      ]
+    },
+    {
+      "id": "seg-15",
+      "text": "黑洞就是一个绝对孤独的深渊。",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "awe",
+      "emphasis": [
+        "黑洞就是",
+        "一个绝对"
+      ]
+    },
+    {
+      "id": "seg-16",
+      "text": "在视界之内，物理定律被逼到极限。",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "curious",
+      "emphasis": [
+        "在视界之",
+        "物理定律"
+      ]
+    },
+    {
+      "id": "seg-17",
+      "text": "靠近黑洞的物质会被拉成细长的面条，",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "neutral",
+      "emphasis": [
+        "靠近黑洞",
+        "的物质会"
+      ]
+    },
+    {
+      "id": "seg-18",
+      "text": "时间流速被无限放慢。",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "tense",
+      "emphasis": [
+        "时间流速",
+        "被无限放"
+      ]
+    },
+    {
+      "id": "seg-19",
+      "text": "对外面的观察者来说，",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "awe",
+      "emphasis": [
+        "对外面的",
+        "观察者来"
+      ]
+    },
+    {
+      "id": "seg-20",
+      "text": "一个掉进黑洞的物体，",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "curious",
+      "emphasis": [
+        "一个掉进",
+        "黑洞的物"
+      ]
+    },
+    {
+      "id": "seg-21",
+      "text": "会永远凝固在视界表面，仿佛时间停止。这些并非想象，",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "neutral",
+      "emphasis": [
+        "会永远凝",
+        "固在视界"
+      ]
+    },
+    {
+      "id": "seg-22",
+      "text": "而是爱因斯坦方程的直接推论。",
+      "function": "inform",
+      "beat": "concept",
+      "mood": "tense",
+      "emphasis": [
+        "而是爱因",
+        "斯坦方程"
+      ]
+    },
+    {
+      "id": "seg-23",
+      "text": "黑洞大多诞生于恒星的死亡。",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "awe",
+      "emphasis": [
+        "黑洞大多",
+        "诞生于恒"
+      ]
+    },
+    {
+      "id": "seg-24",
+      "text": "一颗质量超过太阳二十倍的恒星，",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "curious",
+      "emphasis": [
+        "一颗质量",
+        "超过太阳"
+      ]
+    },
+    {
+      "id": "seg-25",
+      "text": "靠核聚变产生的向外辐射压，",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "neutral",
+      "emphasis": [
+        "靠核聚变",
+        "产生的向"
+      ]
+    },
+    {
+      "id": "seg-26",
+      "text": "对抗自身巨大的引力，",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "tense",
+      "emphasis": [
+        "对抗自身",
+        "巨大的引"
+      ]
+    },
+    {
+      "id": "seg-27",
+      "text": "熊熊燃烧上千万年。而当燃料终于耗尽，",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "awe",
+      "emphasis": [
+        "熊熊燃烧",
+        "上千万年"
+      ]
+    },
+    {
+      "id": "seg-28",
+      "text": "这场持续千万年的对抗，",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "curious",
+      "emphasis": [
+        "这场持续",
+        "千万年的"
+      ]
+    },
+    {
+      "id": "seg-29",
+      "text": "会在瞬间戛然而止。",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "neutral",
+      "emphasis": [
+        "会在瞬间",
+        "戛然而止"
+      ]
+    },
+    {
+      "id": "seg-30",
+      "text": "引力与辐射压的千万年战争，就此分出胜负。",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "tense",
+      "emphasis": [
+        "引力与辐",
+        "射压的千"
+      ]
+    },
+    {
+      "id": "seg-31",
+      "text": "失去支撑的核心以极高的速度向内坍缩，",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "awe",
+      "emphasis": [
+        "失去支撑",
+        "的核心以"
+      ]
+    },
+    {
+      "id": "seg-32",
+      "text": "外层则以超新星爆发的形式被狠狠炸向宇宙空间。",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "curious",
+      "emphasis": [
+        "外层则以",
+        "超新星爆"
+      ]
+    },
+    {
+      "id": "seg-33",
+      "text": "如果剩下的核心质量仍然超过太阳的三倍，",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "neutral",
+      "emphasis": [
+        "如果剩下",
+        "的核心质"
+      ]
+    },
+    {
+      "id": "seg-34",
+      "text": "就再也没有任何已知力量能够阻止它，",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "tense",
+      "emphasis": [
+        "就再也没",
+        "有任何已"
+      ]
+    },
+    {
+      "id": "seg-35",
+      "text": "物质被无限压缩成一个密度无穷大的奇点，黑洞就此诞生。",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "awe",
+      "emphasis": [
+        "物质被无",
+        "限压缩成"
+      ]
+    },
+    {
+      "id": "seg-36",
+      "text": "整个过程，只需要不到一秒钟。",
+      "function": "advance",
+      "beat": "mechanism",
+      "mood": "curious",
+      "emphasis": [
+        "整个过程",
+        "只需要不"
+      ]
+    },
+    {
+      "id": "seg-37",
+      "text": "黑洞大致分为两类。",
+      "function": "inform",
+      "beat": "case",
+      "mood": "neutral",
+      "emphasis": [
+        "黑洞大致",
+        "分为两类"
+      ]
+    },
+    {
+      "id": "seg-38",
+      "text": "恒星坍缩形成的小型黑洞，",
+      "function": "inform",
+      "beat": "case",
+      "mood": "tense",
+      "emphasis": [
+        "恒星坍缩",
+        "形成的小"
+      ]
+    },
+    {
+      "id": "seg-39",
+      "text": "质量是太阳的几倍到几十倍；",
+      "function": "inform",
+      "beat": "case",
+      "mood": "awe",
+      "emphasis": [
+        "质量是太",
+        "阳的几倍"
+      ]
+    },
+    {
+      "id": "seg-40",
+      "text": "而在几乎所有大星系的中心，",
+      "function": "inform",
+      "beat": "case",
+      "mood": "curious",
+      "emphasis": [
+        "而在几乎",
+        "所有大星"
+      ]
+    },
+    {
+      "id": "seg-41",
+      "text": "都坐着一个质量是太阳数百万甚至数十亿",
+      "function": "inform",
+      "beat": "case",
+      "mood": "neutral",
+      "emphasis": [
+        "都坐着一",
+        "个质量是"
+      ]
+    },
+    {
+      "id": "seg-42",
+      "text": "倍的超大质量黑洞，",
+      "function": "inform",
+      "beat": "case",
+      "mood": "tense",
+      "emphasis": [
+        "倍的超大",
+        "质量黑洞"
+      ]
+    },
+    {
+      "id": "seg-43",
+      "text": "它们掌控着整个星系的演化。",
+      "function": "inform",
+      "beat": "case",
+      "mood": "awe",
+      "emphasis": [
+        "它们掌控",
+        "着整个星"
+      ]
+    },
+    {
+      "id": "seg-44",
+      "text": "它们甚至决定着所在星系能容纳多少恒星。",
+      "function": "inform",
+      "beat": "case",
+      "mood": "curious",
+      "emphasis": [
+        "它们甚至",
+        "决定着所"
+      ]
+    },
+    {
+      "id": "seg-45",
+      "text": "在银河系的中心，",
+      "function": "inform",
+      "beat": "case",
+      "mood": "neutral",
+      "emphasis": [
+        "在银河系",
+        "的中心"
+      ]
+    },
+    {
+      "id": "seg-46",
+      "text": "就潜伏着一个质量相当于四百三十万个太阳的巨人。",
+      "function": "inform",
+      "beat": "case",
+      "mood": "tense",
+      "emphasis": [
+        "就潜伏着",
+        "一个质量"
+      ]
+    },
+    {
+      "id": "seg-47",
+      "text": "天文学家通过长期追踪它周围恒星的运动轨迹，",
+      "function": "inform",
+      "beat": "case",
+      "mood": "awe",
+      "emphasis": [
+        "天文学家",
+        "通过长期"
+      ]
+    },
+    {
+      "id": "seg-48",
+      "text": "并最终拍到了它阴影的照片，",
+      "function": "inform",
+      "beat": "case",
+      "mood": "curious",
+      "emphasis": [
+        "并最终拍",
+        "到了它阴"
+      ]
+    },
+    {
+      "id": "seg-49",
+      "text": "从而验证了爱因斯坦百年多前的预言。那张照片，",
+      "function": "inform",
+      "beat": "case",
+      "mood": "neutral",
+      "emphasis": [
+        "从而验证",
+        "了爱因斯"
+      ]
+    },
+    {
+      "id": "seg-50",
+      "text": "是人类第一次亲眼看见黑洞的样子。",
+      "function": "inform",
+      "beat": "case",
+      "mood": "tense",
+      "emphasis": [
+        "是人类第",
+        "一次亲眼"
+      ]
+    },
+    {
+      "id": "seg-51",
+      "text": "所以，黑洞并不是宇宙的毁灭者，",
+      "function": "emotion",
+      "beat": "summary",
+      "mood": "awe",
+      "emphasis": [
+        "黑洞并不",
+        "是宇宙的"
+      ]
+    },
+    {
+      "id": "seg-52",
+      "text": "而是引力书写的一个极端答案。",
+      "function": "emotion",
+      "beat": "summary",
+      "mood": "curious",
+      "emphasis": [
+        "而是引力",
+        "书写的一"
+      ]
+    },
+    {
+      "id": "seg-53",
+      "text": "它吞掉物质，也点亮类星体；它让光沉默，",
+      "function": "emotion",
+      "beat": "summary",
+      "mood": "neutral",
+      "emphasis": [
+        "它吞掉物",
+        "也点亮类"
+      ]
+    },
+    {
+      "id": "seg-54",
+      "text": "也让我们得以窥见宇宙最深的规律。",
+      "function": "emotion",
+      "beat": "summary",
+      "mood": "tense",
+      "emphasis": [
+        "也让我们",
+        "得以窥见"
+      ]
+    },
+    {
+      "id": "seg-55",
+      "text": "理解黑洞，就是理解引力的终极浪漫。",
+      "function": "emotion",
+      "beat": "summary",
+      "mood": "awe",
+      "emphasis": [
+        "理解黑洞",
+        "就是理解"
+      ]
+    },
+    {
+      "id": "seg-56",
+      "text": "而宇宙的奥秘，才刚刚揭开一角。",
+      "function": "emotion",
+      "beat": "summary",
+      "mood": "curious",
+      "emphasis": [
+        "而宇宙的",
+        "奥秘"
+      ]
+    }
+  ]
+}
