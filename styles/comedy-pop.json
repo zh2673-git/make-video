@@ -27,7 +27,7 @@
     "performance": "定格+内心独白；反应弹入；破第四面墙；极端挤压拉伸；冲击震动",
     "sourcing": "用户素材→戏仿构图公式（黑帮海报式头像）；音效梗库",
     "sound": "双声线（播音腔 setup/滑稽腔 punchline）；唱片急停；怀旧金曲骤起骤停",
-    "editing": "硬切优先；comedy-beat 曲线（急停定格0.5s→反应0.8s）；梗落点四联动"
+    "editing": "硬切优先；段落转折可用溶解；comedy-beat 曲线（急停定格0.5s→反应0.8s）；梗落点四联动"
   },
   "palette": {
     "primary": "#dc2626",
@@ -84,7 +84,8 @@
   },
   "transitions": [
     "hard-cut",
-    "smash-cut"
+    "smash-cut",
+    "dissolve"
   ],
   "shotScaleBias": [
     "CU",
@@ -99,5 +100,29 @@
   },
   "references": "references.md",
   "antiPatterns": "anti-patterns.md",
-  "subtitlePolicy": "keyword"
+  "subtitlePolicy": "keyword",
+  "visuals": {
+    "dimension": "css3d",
+    "motifs": [
+      "heroic-low-angle",
+      "smash-zoom",
+      "freeze-frame",
+      "comic-symbol",
+      "punch-line-3d"
+    ],
+    "sceneBias": [
+      "comic-symbol",
+      "comparison",
+      "typography",
+      "iso-stage"
+    ],
+    "sceneDeny": [
+      "depth-layers"
+    ],
+    "texture": [
+      "grain",
+      "halation"
+    ],
+    "note": "港片俗艳质感加漫画符号；庄重形式配 trivial 内容，破功处可用一次立体字砸下来"
+  }
 }

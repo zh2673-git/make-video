@@ -79,3 +79,30 @@ export function validateProvenance(pack: StylePack): Issue[] {
   }
   return issues;
 }
+
+/**
+ * V-STYLE-008 风格-素材一致性（轻闸门）：
+ * 风格声明了素材语言（维度/母题/偏好/禁用），就必须真的影响素材选择与场景形态；
+ * 这里只管「配置自洽 + 禁用素材没被用上」，场景 HTML 侧的维度一致由 V.validateSceneFile 管。
+ */
+export function validateStyleVisual(project: Project, pack: StylePack): Issue[] {
+  const issues: Issue[] = [];
+  const v = pack.visuals;
+  // 存量测试/旧工程可能构造无 visuals 的假包：视为未声明素材语言，直接放行
+  if (!v) return issues;
+  const deny = new Set(v.sceneDeny);
+  const conflict = v.sceneBias.filter((t) => deny.has(t));
+  if (conflict.length > 0) {
+    issues.push(err('V-STYLE-008', `风格 ${pack.id} 的 sceneBias 与 sceneDeny 冲突：${conflict.join('/')}`));
+  }
+  for (const s of project.shots) {
+    const t = s.visual.template ?? '';
+    if (deny.has(t)) {
+      issues.push(warn('V-STYLE-008', `镜头 ${s.id} 使用了风格禁用的素材形态 ${t}`));
+    }
+  }
+  if (v.dimension === 'css3d' && v.motifs.length === 0) {
+    issues.push(warn('V-STYLE-008', `风格 ${pack.id} 声明 css3d 但未登记任何 3D 母题`));
+  }
+  return issues;
+}

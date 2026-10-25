@@ -97,7 +97,6 @@ export class StyleRegistry {
       throw mvError(ERR.STYLE_INVALID, `风格组合不合法:\n${V.formatIssues(issues)}`);
     }
     const lineage = (overrides['_lineage'] as string[] | undefined) ?? [];
-    if (lineage.length === 0) return base;
     let merged: StylePack = { ...base };
     for (const id of lineage) {
       const donor = this.getStyle(id);

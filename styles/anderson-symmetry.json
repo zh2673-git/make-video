@@ -98,5 +98,24 @@
     "review": "v1 对拍验收"
   },
   "references": "references.md",
-  "antiPatterns": "anti-patterns.md"
+  "antiPatterns": "anti-patterns.md",
+  "visuals": {
+    "dimension": "2d",
+    "motifs": [
+      "symmetric-layout",
+      "pastel",
+      "paper-cut"
+    ],
+    "sceneBias": [
+      "comparison",
+      "typography"
+    ],
+    "sceneDeny": [
+      "depth-layers"
+    ],
+    "texture": [
+      "paper"
+    ],
+    "note": "正面平面对称、pastel 绘本质感；禁透视纵深与手持感"
+  }
 }

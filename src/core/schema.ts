@@ -33,6 +33,44 @@ export type Stage = z.infer<typeof StageSchema>;
 export const VisualKindSchema = z.enum(['code-scene', 'user-material', 'imported', 'cloud']);
 export type VisualKind = z.infer<typeof VisualKindSchema>;
 
+// 运镜词表（docs/05 摄影 / docs/10 V-CAM-002）：
+// static/none 是**导演的合法选择**（静止构图 + 镜内表演），不是"漏填"；
+// 词表只负责拒绝没登记的词（dolly-zoom 这类会静默退化成静止的拼写漂移）。
+export const CAMERA_MOVES = [
+  'push-in',
+  'pull-out',
+  'pan',
+  'pan-left',
+  'tilt-up',
+  'tilt-down',
+] as const;
+export type CameraMove = (typeof CAMERA_MOVES)[number] | 'static';
+
+const CAMERA_ALIASES: Record<string, CameraMove> = {
+  'push-in': 'push-in',
+  pushin: 'push-in',
+  'pull-out': 'pull-out',
+  pullout: 'pull-out',
+  pan: 'pan',
+  'pan-left': 'pan-left',
+  panleft: 'pan-left',
+  'tilt-up': 'tilt-up',
+  tiltup: 'tilt-up',
+  'tilt-down': 'tilt-down',
+  tiltdown: 'tilt-down',
+  static: 'static',
+  none: 'static',
+};
+
+/** 运镜词归一化：未登记词返回 undefined（由调用方决定是报错还是兜底） */
+export function normalizeCameraToken(raw: string | undefined): CameraMove | undefined {
+  return CAMERA_ALIASES[(raw ?? '').trim().toLowerCase()];
+}
+
+export function isCameraToken(raw: string | undefined): boolean {
+  return normalizeCameraToken(raw) !== undefined;
+}
+
 export const CounterpointSchema = z.enum(['metaphor', 'evidence', 'emotion', 'parody']);
 export type Counterpoint = z.infer<typeof CounterpointSchema>;
 
@@ -96,6 +134,25 @@ export const DirectorNoteSchema = z.object({
 });
 export type DirectorNote = z.infer<typeof DirectorNoteSchema>;
 
+// 覆盖（coverage）：同一场景内的换机位硬切。at 为镜头内归一化时间（0-1），
+// 由剪辑部在合成时换算成绝对毫秒并落到相机轨；scale 为相对当前机位的倍率。
+export const CoverageSchema = z.object({
+  at: z.number().min(0).max(1),
+  kind: z.enum(['punch-in', 'reframe']).default('punch-in'),
+  scale: z.number().min(0.8).max(1.6).default(1.16),
+  xPercent: z.number().min(-12).max(12).default(0),
+  yPercent: z.number().min(-12).max(12).default(0),
+  rotation: z.number().min(-3).max(3).default(0),
+  motivation: z.string().default('emphasis'),
+});
+export type Coverage = z.infer<typeof CoverageSchema>;
+
+// 合成期落地后的覆盖切点（绝对毫秒，镜头内）
+export const CoverageCutSchema = CoverageSchema.omit({ at: true }).extend({
+  atMs: z.number().int().nonnegative(),
+});
+export type CoverageCut = z.infer<typeof CoverageCutSchema>;
+
 export const ShotSchema = z.object({
   id: z.string(),
   segmentId: z.string(),
@@ -109,6 +166,11 @@ export const ShotSchema = z.object({
   // V-COL-002 色彩脚本：每镜色温标注（cool/neutral/warm）
   colorTemp: z.enum(['cool', 'neutral', 'warm']).optional(),
   transition: z.string().default('dissolve'),
+  // docs/04 A5：镜头内覆盖 / match-cut 锚点 / J-L cut 音频偏移（±200ms）
+  coverage: z.array(CoverageSchema).max(3).default([]),
+  enterAnchor: z.string().default(''),
+  exitAnchor: z.string().default(''),
+  audioShiftMs: z.number().int().min(-200).max(200).default(0),
   state: ShotStateSchema.default('pending'),
   stage: z.string().optional(),
   asset: AssetRefSchema.optional(),
@@ -168,11 +230,26 @@ export const TimelineSchema = z.object({
       startMs: z.number(),
       durationMs: z.number(),
       transition: z.string(),
+      // 剪辑部落地字段（docs/08）：镜头内覆盖切点 / 机位运动 / 切点动机 / J-L cut 音频偏移
+      coverage: z.array(CoverageCutSchema).default([]),
+      camera: z.string().default('none'),
+      motivation: z.string().default(''),
+      audioShiftMs: z.number().default(0),
     }),
   ),
   subtitles: z.array(SubtitleCueSchema).default([]),
   bgm: z.string().optional(),
-  sfx: z.array(z.object({ file: z.string(), atMs: z.number(), kind: z.string() })).default([]),
+  // leadMs：音效相对视觉剪切点的前置量（负值 = 声音先入，见 docs/07 J-cut）
+  sfx: z
+    .array(
+      z.object({
+        file: z.string(),
+        atMs: z.number(),
+        kind: z.string(),
+        leadMs: z.number().default(0),
+      }),
+    )
+    .default([]),
 });
 export type Timeline = z.infer<typeof TimelineSchema>;
 
@@ -204,6 +281,8 @@ export const MixPlanSchema = z.object({
       file: z.string(),
       atMs: z.number().int().nonnegative(),
       kind: z.enum(['whoosh', 'hit', 'riser']),
+      // 相对视觉切点的前置量（负值 = 声音先入；whoosh 需在切点前起势，峰值才落在切点）
+      leadMs: z.number().default(0),
     }),
   ),
 });
@@ -225,6 +304,27 @@ export const ProjectSchema = z.object({
   confirmed: z.boolean().default(false),
 });
 export type Project = z.infer<typeof ProjectSchema>;
+
+/**
+ * 素材语言（风格 → 素材的一致性契约，docs/11 §二）：
+ * 风格不只给颜色和字体，还要说清「这一派用什么材质、什么维度、什么母题、禁用什么」，
+ * 场景选择与场景生成都必须读它，否则风格只剩调色、素材仍是随机配图。
+ */
+export const StyleVisualSchema = z.object({
+  /** 视觉维度：2d 平面 / css3d 立体（透视+旋转）/ mixed 混用 */
+  dimension: z.enum(['2d', 'css3d', 'mixed']).default('2d'),
+  /** 可渲染母题 id（对应 motion-lib 的 3D 原语与场景件） */
+  motifs: z.array(z.string()).default([]),
+  /** 场景类型偏好（模板名，不含 canvas: 前缀） */
+  sceneBias: z.array(z.string()).default([]),
+  /** 场景类型禁用（与偏好冲突时禁用优先） */
+  sceneDeny: z.array(z.string()).default([]),
+  /** 纹理/光效层：grain / halation / paper / scanline … 由场景模板按需铺 */
+  texture: z.array(z.string()).default([]),
+  /** 一句话素材语言（给 LLM 的风格指令，进 scene prompt） */
+  note: z.string().default(''),
+});
+export type StyleVisual = z.infer<typeof StyleVisualSchema>;
 
 export const StylePackSchema = z.object({
   id: z.string(),
@@ -266,6 +366,7 @@ export const StylePackSchema = z.object({
     breathEvery: z.number().int().positive(),
   }),
   effects: z.record(z.union([z.number(), z.boolean()])),
+  visuals: StyleVisualSchema.default({}),
   transitions: z.array(z.string()).min(1),
   shotScaleBias: z.array(ZoomSchema).min(1),
   provenance: z.object({

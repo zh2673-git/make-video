@@ -96,5 +96,24 @@
     "review": "v1 对拍验收"
   },
   "references": "references.md",
-  "antiPatterns": "anti-patterns.md"
+  "antiPatterns": "anti-patterns.md",
+  "visuals": {
+    "dimension": "2d",
+    "motifs": [
+      "flat-typography",
+      "single-subject",
+      "hairline-grid"
+    ],
+    "sceneBias": [
+      "typography",
+      "comparison"
+    ],
+    "sceneDeny": [
+      "comic-symbol",
+      "iso-stage",
+      "depth-layers"
+    ],
+    "texture": [],
+    "note": "纯黑舞台、无纹理、无立体装饰；一屏一事，留白即高级"
+  }
 }

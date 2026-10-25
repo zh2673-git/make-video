@@ -96,5 +96,24 @@
     "review": "v1 对拍验收"
   },
   "references": "references.md",
-  "antiPatterns": "anti-patterns.md"
+  "antiPatterns": "anti-patterns.md",
+  "visuals": {
+    "dimension": "2d",
+    "motifs": [
+      "flat-vector",
+      "bold-outline",
+      "candy-palette"
+    ],
+    "sceneBias": [
+      "flow",
+      "chart",
+      "comparison"
+    ],
+    "sceneDeny": [
+      "iso-stage",
+      "depth-layers"
+    ],
+    "texture": [],
+    "note": "扁平矢量、粗描边、糖果色；禁写实材质与立体装饰"
+  }
 }

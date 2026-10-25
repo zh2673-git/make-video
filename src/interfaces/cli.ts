@@ -170,6 +170,75 @@ program
   });
 
 program
+  .command('stock <query>')
+  .description('真实素材检索（需 MAKEVIDEO_PEXELS_API_KEY，未配置时默认关闭）')
+  .option('--project <id>', '项目 id（下载/绑定时必填）')
+  .option('--count <n>', '返回条数 1-20', '3')
+  .option('--type <type>', 'image|video', 'image')
+  .option('--download', '下载到 materials/ 并入库')
+  .option('--shot <id>', '把首条结果绑定为该镜的真实素材（隐含下载）')
+  .action(async (query: string, opts: Record<string, string | boolean>) => {
+    try {
+      const { searchStock, downloadStock, stockEnabled, STOCK_HINT } = await import(
+        '../infrastructure/stock-media.js'
+      );
+      if (!stockEnabled()) {
+        out({ enabled: false, hint: STOCK_HINT });
+        return;
+      }
+      const type = opts['type'] === 'video' ? 'video' : 'image';
+      const count = Number(opts['count'] ?? 3);
+      const result = await searchStock(query, { count, type });
+      const wantDownload = Boolean(opts['download'] || opts['shot']);
+      if (!wantDownload) {
+        out({ enabled: true, provider: result.provider, items: result.items });
+        return;
+      }
+      const { store } = makeEngine();
+      const id = await store.resolveProjectId(opts['project'] as string | undefined);
+      const project = await store.load(id);
+      const dir = store.projectDir(id);
+      const stage = path.join(dir, 'gen', 'stock', String(Date.now()));
+      const staged: string[] = [];
+      for (const hit of result.items) staged.push(await downloadStock(hit, stage));
+      const { indexMaterials } = await import('../domain/asset-sourcing.js');
+      const index = await indexMaterials(store, project, staged);
+      const fs = await import('node:fs/promises');
+      await fs.rm(stage, { recursive: true, force: true });
+      const downloaded = index.items
+        .filter((i) => staged.some((f) => path.basename(f) === path.basename(i.path)))
+        .map((i) => i.path);
+
+      let bound: { shot: string; path: string } | undefined;
+      const shotId = opts['shot'] as string | undefined;
+      if (shotId) {
+        const shot = project.shots.find((s) => s.id === shotId);
+        if (!shot) throw new Error(`镜头不存在: ${shotId}`);
+        const file = downloaded[0];
+        if (!file) throw new Error('没有可用的下载结果');
+        const hit = result.items[0]!;
+        shot.visual = {
+          kind: 'user-material',
+          prompt: query,
+          params: { stock: { provider: hit.provider, id: hit.id, author: hit.author, pageUrl: hit.pageUrl } },
+        };
+        shot.asset = {
+          kind: 'user-material',
+          path: file,
+          meta: { stock: { provider: hit.provider, id: hit.id, author: hit.author, pageUrl: hit.pageUrl } },
+        };
+        shot.state = 'sourced';
+        project.timeline = undefined;
+        await store.save(project);
+        bound = { shot: shotId, path: file };
+      }
+      out({ enabled: true, provider: result.provider, items: result.items, downloaded, ...(bound ? { bound } : {}) });
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
   .command('storyboard')
   .description('导演批注 + 分镜 + 确认表（A3/A4/A5）')
   .option('--project <id>', '项目 id')
@@ -260,10 +329,12 @@ program
   .option('--from <file>', '外部场景 HTML 文件')
   .action(async (opts: Record<string, string>) => {
     try {
-      const { store } = makeEngine();
+      const { store, registry } = makeEngine();
       const id = await store.resolveProjectId(opts['project']);
       const project = await store.load(id);
-      const r = await adoptSceneFile(store, project, opts['shot'] ?? '', opts['from'] ?? '');
+      await registry.ensureLoaded();
+      const pack = project.style ? registry.resolveStyle(project.style) : undefined;
+      const r = await adoptSceneFile(store, project, opts['shot'] ?? '', opts['from'] ?? '', pack);
       out({
         shot: opts['shot'],
         adopted: r.adopted,

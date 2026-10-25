@@ -1,4 +1,4 @@
-import path from 'node:path';
+﻿import path from 'node:path';
 import type { Project, Shot, StylePack } from '../core/schema.js';
 import { V } from '../core/index.js';
 import { mvError, ERR } from '../core/errors.js';
@@ -65,7 +65,13 @@ export async function drawScene(
   // 则不再覆盖——校验通过直接沿用；违规则带反馈报错（failReason 即给 agent 的修改意见）
   if (exists(out)) {
     const existing = await readTemplate(out);
-    const issues = validateSceneHtml(existing, shot, project, shot.visual.template ?? 'typography');
+    const issues = validateSceneHtml(
+      existing,
+      shot,
+      project,
+      shot.visual.template ?? 'typography',
+      pack.visuals?.dimension,
+    );
     if (V.hasError(issues)) {
       throw mvError(
         ERR.SCENE_INVALID,
@@ -78,7 +84,13 @@ export async function drawScene(
   if (llm) {
     const generated = await tryLlmScene(llm, project, shot, pack);
     if (generated) {
-      const issues = validateSceneHtml(generated.html, shot, project, generated.template);
+      const issues = validateSceneHtml(
+        generated.html,
+        shot,
+        project,
+        generated.template,
+        pack.visuals?.dimension,
+      );
       if (!V.hasError(issues)) {
         const out = path.join(dir, 'scenes', `Scene_${shot.id}.html`);
         await atomicWriteText(out, generated.html);
@@ -107,7 +119,13 @@ export async function drawScene(
     .replace('{{KICKER}}', isCanvas ? escapeHtml(String(shot.visual.params?.['kicker'] ?? '')) : '')
     .replace('{{BEATS}}', isCanvas ? String(BEATS_PER_PROGRAM[templateName.slice('canvas:'.length)] ?? 6) : '')
     .replace(/\{\{STAR_SEED\}\}/g, String(hashSeed(shot.id)));
-  const issues = validateSceneHtml(html, shot, project, templateName);
+  const issues = validateSceneHtml(
+    html,
+    shot,
+    project,
+    templateName,
+    pack.visuals?.dimension,
+  );
   if (V.hasError(issues)) {
     throw mvError(ERR.SCENE_INVALID, `场景 ${shot.id} 校验失败:\n${V.formatIssues(issues)}`);
   }
@@ -127,12 +145,19 @@ export async function adoptScene(
   project: Project,
   shotId: string,
   file: string,
+  pack?: StylePack,
 ): Promise<{ adopted: boolean; issues: V.Issue[] }> {
   const shot = project.shots.find((s) => s.id === shotId);
   if (!shot) throw mvError(ERR.PROJECT_NOT_FOUND, `镜头不存在: ${shotId}`);
   if (!exists(file)) throw mvError(ERR.SCENE_INVALID, `场景文件不存在: ${file}`);
   const html = await readTemplate(file);
-  const issues = validateSceneHtml(html, shot, project, shot.visual.template ?? 'typography');
+  const issues = validateSceneHtml(
+    html,
+    shot,
+    project,
+    shot.visual.template ?? 'typography',
+    pack?.visuals?.dimension,
+  );
   if (V.hasError(issues)) {
     return { adopted: false, issues };
   }
@@ -142,16 +167,18 @@ export async function adoptScene(
   return { adopted: true, issues };
 }
 
-/** 场景校验统一入口（LLM 与 forge 共用） */
+/** 场景校验统一入口（LLM 与 forge 共用）；dimension 走 V-STYLE-008 素材语言一致性 */
 function validateSceneHtml(
   html: string,
   shot: Shot,
   project: Project,
   templateName: string,
+  dimension?: '2d' | 'css3d' | 'mixed',
 ): V.Issue[] {
   const issues = V.validateSceneFile(html, {
     narration: shot.narration,
     title: project.meta.title,
+    dimension,
   });
   if (templateName === 'chart') {
     issues.push(...V.validateChartScene(html));
@@ -214,6 +241,12 @@ async function tryLlmScene(
     camera: shot.camera === 'none' ? 'push-in' : shot.camera,
     zoom: shot.zoom,
     template: shot.visual.template ?? 'typography',
+    // 风格素材语言（V-STYLE-008）：维度/母题/纹理/禁用 + 美术-摄影-表演三条部门指令，
+    // 让画面长成这一派的样子，而不是只换一套配色
+    styleVisual: pack.visuals,
+    artDirective: pack.anatomy?.art ?? '',
+    cameraDirective: pack.anatomy?.camera ?? '',
+    performanceDirective: pack.anatomy?.performance ?? '',
     tokens: {
       primary: tokens.primary,
       accent: tokens.accent,
@@ -234,7 +267,7 @@ async function tryLlmScene(
     };
     const html = res?.html ?? '';
     if (!html) return null; // 引擎无 scene 能力（template 模式声明）→ forge 兜底
-    const issues = validateSceneHtml(html, shot, project, base.template);
+    const issues = validateSceneHtml(html, shot, project, base.template, pack.visuals?.dimension);
     if (!V.hasError(issues)) return { html, template: base.template };
     feedback = `上一版被校验器打回，逐条修复后重出完整 HTML：\n${V.formatIssues(issues)}`;
   }

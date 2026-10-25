@@ -16,6 +16,22 @@ import { copyDir } from './composer-utils.js';
 import { escapeHtml } from './scene-forge.js';
 import { buildVoTrack, buildBgm, duckBgm, buildSfx, planMix, exportSrt } from './audiomix.js';
 import { DUCK_RATIO } from '../core/constants.js';
+import {
+  planTransition,
+  cutMotivation,
+  deriveRelationMotivation,
+  motivationTransition,
+  type TransitionPlan,
+} from './transitions.js';
+import { extractFrame } from '../infrastructure/ffmpeg-utils.js';
+import {
+  buildRigScript,
+  deriveCoverage,
+  parseCameraOptions,
+  pickSubjectFocus,
+  planCameraRig,
+  type RigPlan,
+} from './camera.js';
 
 export function validateReadiness(project: Project): V.Issue[] {
   const issues: V.Issue[] = [];
@@ -76,12 +92,27 @@ export function computeTimeline(project: Project): Timeline {
   let acc = 0;
   for (const shot of project.shots) {
     const durationMs = shot.voice?.durationMs ?? 0;
-    shots.push({ shotId: shot.id, startMs: acc, durationMs, transition: shot.transition });
+    const segment = project.script?.segments.find((x) => x.id === shot.segmentId);
+    shots.push({
+      shotId: shot.id,
+      startMs: acc,
+      durationMs,
+      transition: shot.transition,
+      // 剪辑部：覆盖切点在此换算为镜头内绝对毫秒（导演声明始终生效；重音词自动派生需逐镜 opt-in）
+      coverage: deriveCoverage(
+        shot,
+        segment?.emphasis ?? [],
+        durationMs,
+        shot.visual.params['autoCoverage'] === true,
+      ),
+      camera: shot.camera,
+      motivation: '',
+      audioShiftMs: 0,
+    });
     // V-SND-004：按句读切分 cue，句内各 cue 时长按字符数比例分配（标点等分的句子级实现）
     const sentences = splitSentences(shot.narration);
     const totalChars = sentences.reduce((a, s) => a + s.length, 0) || 1;
     let cueStart = acc;
-    const segment = project.script?.segments.find((x) => x.id === shot.segmentId);
     for (const sentence of sentences) {
       const cueMs = Math.max(800, Math.round((sentence.length / totalChars) * durationMs));
       const endMs = Math.min(acc + durationMs, cueStart + cueMs);
@@ -111,18 +142,125 @@ export function splitSentences(text: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+export interface CutDecision {
+  plan: TransitionPlan;
+  /** 归一化切点动机（match-cut/action/eye-line/emotion/beat/zoom-jump） */
+  motivation: string;
+  /** 动机来源：导演文案 / match-cut 锚点 / 客观关系反推 / 无 */
+  motiveSource: 'text' | 'anchor' | 'relation' | 'none';
+  /** match-cut 锚点对（形如 A→A） */
+  anchors: string;
+  /** 导演声明与动机冲突时的审计提示（不改声明，只记录） */
+  note: string;
+}
+
+/**
+ * 剪辑部切点裁决（docs/08 ④）：
+ * - 相邻镜 exitAnchor/enterAnchor 相同 → match-cut，硬切（形状在观众眼里接成一根线）；
+ * - 动机先取导演文案，取不到再用客观关系反推（景别跳/视线反转/笑点落镜）；
+ * - 转场词为 auto/空 → 由切点动机决定（情绪→溶解 / 动作·节拍→冲击切 / 其余硬切）；
+ * - 显式声明的转场词仍按风格包词表裁决，动机只做一致性审计。
+ */
+export function adjudicateCuts(
+  project: Project,
+  timeline: Timeline,
+  pack: StylePack,
+): Array<CutDecision | null> {
+  return timeline.shots.map((t, i) => {
+    if (i === 0) return null;
+    const prev = project.shots[i - 1];
+    const cur = project.shots[i];
+    const prevT = timeline.shots[i - 1]!;
+    const anchor =
+      prev?.exitAnchor && cur?.enterAnchor ? `${prev.exitAnchor}→${cur.enterAnchor}` : '';
+    if (prev?.exitAnchor && cur?.enterAnchor && prev.exitAnchor === cur.enterAnchor) {
+      prevT.motivation = 'match-cut';
+      t.motivation = 'match-cut';
+      return {
+        plan: { kind: 'hard-cut', durationMs: 0, overlapMs: 0 },
+        motivation: 'match-cut',
+        motiveSource: 'anchor',
+        anchors: anchor,
+        note: '',
+      };
+    }
+    const textMotive = cutMotivation(cur?.motivation);
+    const relationMotive = textMotive
+      ? ''
+      : deriveRelationMotivation(
+          shotFacts(prev),
+          shotFacts(cur),
+        );
+    const motive = textMotive || relationMotive;
+    const motiveSource: CutDecision['motiveSource'] = textMotive
+      ? 'text'
+      : relationMotive
+        ? 'relation'
+        : 'none';
+    const requested = (t.transition ?? '').trim();
+    const auto = requested === '' || requested === 'auto';
+    const plan = planTransition(auto ? motivationTransition(motive) : requested, pack.transitions);
+    // 情绪切却声明了硬切：先按导演声明执行，把不一致留在审计里（不擅自改片）
+    const note =
+      !auto && motive === 'emotion' && plan.kind === 'hard-cut'
+        ? `剪切点 ${prev?.id}→${cur?.id} 动机偏情绪但声明硬切（保留声明，可改 transition: dissolve）`
+        : '';
+    t.motivation = motive;
+    return { plan, motivation: t.motivation, motiveSource, anchors: anchor, note };
+  });
+}
+
+function shotFacts(shot: Project['shots'][number] | undefined) {
+  return {
+    zoom: shot?.zoom ?? 'MS',
+    scene: String(shot?.visual.params['scene'] ?? shot?.id ?? ''),
+    side: String(shot?.visual.params['side'] ?? 'center'),
+    gag: Boolean(shot?.gag),
+  };
+}
+
+/**
+ * J-cut / L-cut（docs/07）：只移动旁白音频 clip 的落点，不动时间线时长（V-CMP-001 不变量）。
+ * 软转场（溶解/擦除/甩镜）默认让声音先入 90ms；导演可用 shot.audioShiftMs 显式覆写（±200ms）。
+ */
+export function applyAudioShifts(
+  project: Project,
+  timeline: Timeline,
+  decisions: Array<CutDecision | null>,
+): void {
+  const last = timeline.shots.at(-1);
+  const totalMs = last ? last.startMs + last.durationMs : 0;
+  timeline.shots.forEach((t, i) => {
+    const shot = project.shots[i];
+    const kind = decisions[i]?.plan.kind ?? 'hard-cut';
+    const soft = kind !== 'hard-cut' && kind !== 'smash-cut';
+    let shift = shot?.audioShiftMs ?? 0;
+    if (shift === 0 && i > 0 && soft) shift = -90;
+    if (t.startMs + shift < 0) shift = -t.startMs;
+    if (i === timeline.shots.length - 1 && shift > 0) shift = 0;
+    if (t.startMs + t.durationMs + shift > totalMs) shift = totalMs - (t.startMs + t.durationMs);
+    t.audioShiftMs = Math.round(Math.max(-200, Math.min(200, shift)));
+  });
+}
+
 export async function compose(
   store: ProjectStore,
   project: Project,
   pack: StylePack,
 ): Promise<Timeline> {
   const gate = validateReadiness(project);
+  // V-STYLE-008：风格声明的素材语言必须真的落到素材上（禁用形态/偏好冲突/3D 母题缺失）
+  gate.push(...V.validateStyleVisual(project, pack));
   if (V.hasError(gate)) {
     throw mvError(ERR.VALIDATION, `质量闸门未过:\n${V.formatIssues(gate)}`);
   }
   const report = continuityReport(project);
   const hasViolation = report.items.some((i) => i.status === 'violation');
   const timeline = computeTimeline(project);
+  // 剪辑部裁决（docs/08 ④）：先定切点动机，再由动机/显式声明裁决转场（仍受风格包词表约束）
+  const cutDecisions = adjudicateCuts(project, timeline, pack);
+  const transitionPlans = cutDecisions.map((d) => d?.plan ?? null);
+  applyAudioShifts(project, timeline, cutDecisions);
 
   const syncIssues = V.validateTimelineSync(project.shots, timeline);
   if (V.hasError(syncIssues)) {
@@ -140,7 +278,7 @@ export async function compose(
   const bgm = await duckBgm(bgmRaw, voTrack, audioDir);
   const sfxFiles = await buildSfx(path.join(audioDir, 'sfx'));
   timeline.bgm = path.relative(dir, bgm).split(path.sep).join('/');
-  timeline.sfx = planMix(project, timeline, audioDir).sfxCues;
+  timeline.sfx = planMix(project, timeline, audioDir, transitionPlans).sfxCues;
 
   // A9 混音计划工件
   project.mixPlan = {
@@ -148,28 +286,47 @@ export async function compose(
     tracks: [
       { kind: 'vo', file: path.relative(dir, voTrack), gainDb: 0 },
       { kind: 'bgm', file: path.relative(dir, bgm), gainDb: 0 },
-      { kind: 'sfx', file: path.relative(dir, sfxFiles.whoosh), gainDb: -4 },
+      { kind: 'sfx', file: path.relative(dir, sfxFiles.whoosh), gainDb: -6 },
     ],
     duckRatio: DUCK_RATIO,
     sfxCues: timeline.sfx.map((c) => ({ ...c, kind: c.kind === 'hit' ? 'hit' : 'whoosh' as const })),
   };
 
-  // A8 剪切点审计报告（Rule of Six 候选集）
+  // A8 剪切点审计报告（Rule of Six 候选集 + 切点动机 + 镜内覆盖切）
   const audit = timeline.shots.slice(1).map((t, idx) => {
+    const i = idx + 1;
     const prev = timeline.shots[idx]!;
-    const prevShot = project.shots.find((s) => s.id === prev.shotId);
-    const curShot = project.shots.find((s) => s.id === t.shotId);
+    const prevShot = project.shots[idx];
+    const curShot = project.shots[i];
+    const decision = cutDecisions[i];
     return {
       cut: `${prev.shotId}→${t.shotId}`,
       atMs: t.startMs,
+      transition: decision?.plan.kind ?? 'hard-cut',
+      motivation: decision?.motivation ?? '',
+      motiveSource: decision?.motiveSource ?? 'none',
+      anchors: decision?.anchors ?? '',
+      audioShiftMs: t.audioShiftMs,
+      // 前一镜内的覆盖切（换机位）：这些不是镜间切，但同样要能审计
+      microCuts: prev.coverage.map((c) => ({
+        atMs: prev.startMs + c.atMs,
+        kind: c.kind,
+        scale: c.scale,
+        motivation: c.motivation,
+      })),
       candidates: [
         prevShot && /[，。！？；.!?;]$/.test(prevShot.narration.trim()) ? '句读停顿' : null,
         prevShot && curShot && prevShot.zoom !== curShot.zoom ? '景别变化' : null,
         prevShot && curShot && prevShot.colorTemp !== curShot.colorTemp ? '色温变化' : null,
+        decision?.motivation ? '切点动机' : null,
       ].filter(Boolean),
     };
   });
-  await appendLog(store, project, 'cut-audit.json', JSON.stringify(audit, null, 2));
+  // 审计工件是「本次装配的快照」，必须覆盖写（append 会让多次 compose 拼出非法 JSON）
+  await atomicWriteText(
+    path.join(dir, 'logs', 'cut-audit.json'),
+    JSON.stringify(audit, null, 2),
+  );
 
   // 剪辑节奏 + 声音部 error 级校验
   const sceneDir = path.join(dir, 'scenes');
@@ -200,8 +357,21 @@ export async function compose(
     ...V.validateDensity(timeline, pack.pacing.shotLenMs[0], pack.pacing.shotLenMs[1]),
     ...V.validateBreath(timeline, pack.pacing.breathEvery),
     ...V.validateVisualChange(timeline, sceneBeats),
+    ...V.validateIntraShotMotion(timeline),
+    ...V.validateCutMotivation(timeline),
   ];
-  await appendLog(store, project, 'validation.log', warnIssues.map((i) => `[warn] ${i.id}: ${i.message}`).join('\n'));
+  const transitionWarnings = transitionPlans
+    .filter((p): p is TransitionPlan => Boolean(p?.warning))
+    .map((p) => `[warn] TRANSITION: ${p.warning}`);
+  const cutNotes = cutDecisions
+    .filter((d): d is CutDecision => Boolean(d?.note))
+    .map((d) => `[warn] CUT-MOTIVATION: ${d.note}`);
+  await appendLog(
+    store,
+    project,
+    'validation.log',
+    [...warnIssues.map((i) => `[warn] ${i.id}: ${i.message}`), ...transitionWarnings, ...cutNotes].join('\n'),
+  );
 
   project.timeline = timeline;
   project.continuity = { ...report, items: hasViolation ? report.items : report.items };
@@ -217,7 +387,7 @@ export async function compose(
   const outDir = path.join(dir, 'out');
   await ensureDir(outDir);
   await exportSrt(timeline, path.join(outDir, 'subtitles.srt'));
-  await emitHyperframesProject(store, project, pack, timeline);
+  await emitHyperframesProject(store, project, pack, timeline, transitionPlans);
   await store.save(project);
   return timeline;
 }
@@ -227,6 +397,7 @@ async function emitHyperframesProject(
   project: Project,
   pack: StylePack,
   timeline: Timeline,
+  transitionPlans: Array<TransitionPlan | null>,
 ): Promise<void> {
   const dir = store.projectDir(project.meta.id);
   const hfDir = path.join(dir, 'remotion');
@@ -250,18 +421,58 @@ async function emitHyperframesProject(
 
   // 感知画面排版：读场景 CSS 里主语（.subject）的纵向位置，字幕放对侧（V-CAP-001）
   const sideByShot = new Map<string, 'top' | 'bottom'>();
+  // 机位轨审计：每镜外层机位（分段/覆盖切）落成工件，便于逐镜核验"画面真的在动"
+  const rigAudit: Array<Record<string, unknown>> = [];
   for (const shot of project.shots) {
     const src = path.join(dir, 'scenes', `Scene_${shot.id}.html`);
+    const t = timeline.shots.find((x) => x.shotId === shot.id);
+    const durMs = t?.durationMs ?? 20000;
+    // 真实素材镜（用户提供 / stock 下载）：直接出满幅电影化画面，不再走代码绘制场景
+    const mediaAsset =
+      shot.visual.kind === 'user-material' || shot.visual.kind === 'imported' ? shot.asset : undefined;
+    if (mediaAsset && exists(mediaAsset.path)) {
+      sideByShot.set(shot.id, 'bottom');
+      const rel = await stageMedia(hfDir, shot.id, mediaAsset.path);
+      const rig = planCameraRig({
+        shotId: shot.id,
+        durationMs: durMs,
+        zoom: shot.zoom,
+        camera: shot.camera,
+        focus: { x: 50, y: 50 },
+        coverage: t?.coverage ?? [],
+        options: parseCameraOptions(shot.visual.params),
+      });
+      rigAudit.push(rigSummary(rig));
+      await atomicWriteText(
+        path.join(compDir, `Scene_${shot.id}.html`),
+        buildMediaComposition(shot.id, rel, size, durMs / 1000, buildRigScript(rig)),
+      );
+      continue;
+    }
     if (!exists(src)) {
       throw mvError(ERR.VALIDATION, `镜头 ${shot.id} 场景文件缺失（请先 draw）`);
     }
     const fs = await import('node:fs/promises');
     const sceneHtml = await fs.readFile(src, 'utf8');
     sideByShot.set(shot.id, pickCaptionSide(sceneHtml));
-    const durMs = timeline.shots.find((t) => t.shotId === shot.id)?.durationMs ?? 20000;
-    const wrapped = wrapComposition(sceneHtml, shot.id, size, durMs / 1000);
+    // 摄影部：主语做机位锚点 + 三段式外层机位 + 覆盖切（同一场景换机位）
+    const rig = planCameraRig({
+      shotId: shot.id,
+      durationMs: durMs,
+      zoom: shot.zoom,
+      camera: shot.camera,
+      focus: pickSubjectFocus(sceneHtml),
+      coverage: t?.coverage ?? [],
+      options: parseCameraOptions(shot.visual.params),
+    });
+    rigAudit.push(rigSummary(rig));
+    const wrapped = wrapComposition(sceneHtml, shot.id, size, durMs / 1000, buildRigScript(rig));
     await atomicWriteText(path.join(compDir, `Scene_${shot.id}.html`), wrapped);
   }
+  await atomicWriteText(
+    path.join(dir, 'logs', 'camera-rig.json'),
+    JSON.stringify(rigAudit, null, 2),
+  );
 
   const captions = timeline.subtitles.map((c) => ({
     start: +(c.startMs / 1000).toFixed(3),
@@ -275,16 +486,29 @@ async function emitHyperframesProject(
   timeline.shots.forEach((t, i) => {
     const start = (t.startMs / 1000).toFixed(3);
     const dur = (t.durationMs / 1000).toFixed(3);
+    // 视觉轨与音频轨分离：溶解/擦除把前后两镜在时间上重叠，声音仍按原剪切点入
+    const overlapIn = transitionPlans[i]?.overlapMs ?? 0;
+    const overlapOut = transitionPlans[i + 1]?.overlapMs ?? 0;
+    const clipStart = (Math.max(0, t.startMs - overlapIn) / 1000).toFixed(3);
+    const clipDur = ((t.durationMs + overlapIn + overlapOut) / 1000).toFixed(3);
     // 官方 lint 契约：composition-src 宿主必须带 data-composition-id（渲染器据此挂载并驱动子合成时间线）
     tracks.push(
-      `  <div class="clip" id="clip-${t.shotId}" data-composition-id="scene-${t.shotId}" data-composition-src="compositions/Scene_${t.shotId}.html" data-track-index="0" data-start="${start}" data-duration="${dur}"></div>`,
+      `  <div class="clip scene" id="clip-${t.shotId}" data-composition-id="scene-${t.shotId}" data-composition-src="compositions/Scene_${t.shotId}.html" data-track-index="0" data-start="${clipStart}" data-duration="${clipDur}"></div>`,
     );
+    // smash-cut 闪白：叠在画面之上、字幕之下（DOM 顺序保证），剪辑点当帧给一次冲击
+    if (i > 0 && transitionPlans[i]?.kind === 'smash-cut') {
+      tracks.push(
+        `  <div class="clip flash" id="flash-${t.shotId}" data-track-index="2" data-start="${(t.startMs / 1000 - 0.05).toFixed(3)}" data-duration="0.35"></div>`,
+      );
+    }
     const shot = project.shots[i];
     if (shot?.voice) {
       // 音频必须位于渲染项目根内（../ 越界路径会被文件服务器拒绝导致无声）
       const rel = `audio/vo/${path.basename(shot.voice.file)}`;
+      // J-cut/L-cut：只挪音频落点，不动片长（V-CMP-001 不变量）
+      const aStart = (Math.max(0, t.startMs + (t.audioShiftMs ?? 0)) / 1000).toFixed(3);
       tracks.push(
-        `  <audio class="clip" id="aud-${t.shotId}" data-track-index="1" data-start="${start}" data-duration="${dur}" src="${rel}"></audio>`,
+        `  <audio class="clip" id="aud-${t.shotId}" data-track-index="1" data-start="${aStart}" data-duration="${dur}" src="${rel}"></audio>`,
       );
     }
     // 字幕策略落地（V-CAP-001/002）：off 不出画面字幕；keyword 出关键词梗卡（避让主体+错位摆动）；
@@ -331,15 +555,16 @@ async function emitHyperframesProject(
     const dest = path.join(hfDir, 'audio', 'sfx', base);
     if (exists(src) && !exists(dest)) await copyFile(src, dest);
     if (exists(dest)) {
-      const cs = (cue.atMs / 1000).toFixed(3);
+      // leadMs 负值 = 声音早于画面入点（whoosh 需要在剪切点前起势，峰值才落在切点）
+      const cs = (Math.max(0, cue.atMs + (cue.leadMs ?? 0)) / 1000).toFixed(3);
       tracks.push(
         `  <audio class="clip" id="aud-sfx-${i}" data-track-index="1" data-start="${cs}" data-duration="0.7" src="audio/sfx/${base}"></audio>`,
       );
     }
   }
 
-  // 转场：按 IR transition 词表在剪切点生成交叉溶解（dissolve）/硬切（none/slide 暂按 dissolve 退化）
-  const transitionsScript = buildTransitionsScript(timeline);
+  // 转场：按风格包词表裁决后生成真正的叠化/擦除/甩镜/闪白（硬切不出动画）
+  const transitionsScript = buildTransitionsScript(timeline, transitionPlans);
 
   const totalS = (((timeline.shots.at(-1)?.startMs ?? 0) + (timeline.shots.at(-1)?.durationMs ?? 0)) / 1000).toFixed(3);
   const indexHtml = `<!doctype html>
@@ -363,6 +588,8 @@ async function emitHyperframesProject(
   .kwcard.cap-top { align-items: flex-start; padding-top: 6.5%; padding-bottom: 0; }
   .kwcard.cap-h-l { justify-content: flex-start; padding-left: 9%; }
   .kwcard.cap-h-r { justify-content: flex-end; padding-right: 9%; }
+  /* smash-cut 闪白层：不参与布局，只做剪辑点冲击（字幕元素在其后渲染，自然压在闪白之上） */
+  .clip.flash { position: absolute; inset: 0; background: #fff; pointer-events: none; }
   .kw-stack { display: inline-flex; gap: 0.6em; background: rgba(10,10,14,0.62); border: 2px solid ${pack.palette.accent}; border-radius: 0.35em; padding: 0.3em 0.9em; transform: rotate(var(--tilt, 0deg)); box-shadow: 0 6px 24px rgba(0,0,0,0.45); }
   .kw-stack em { font-style: normal; color: ${pack.palette.accent}; font-weight: 800; font-size: ${Math.round(pack.type.scale.body * size.h * 1.15)}px; letter-spacing: 0.08em; text-shadow: 0 1px 6px rgba(0,0,0,0.6); }
 </style>
@@ -383,6 +610,66 @@ ${transitionsScript}
 </html>
 `;
   await atomicWriteText(path.join(hfDir, 'index.html'), indexHtml);
+}
+
+// 真实素材进渲染工程：图片直接拷贝；视频取首帧（截图逐帧渲染下内嵌 video 的时钟无法与合成时间轴严格对齐）
+async function stageMedia(hfDir: string, shotId: string, assetPath: string): Promise<string> {
+  const outDir = path.join(hfDir, 'media', shotId);
+  await ensureDir(outDir);
+  const ext = path.extname(assetPath).toLowerCase();
+  if (['.mp4', '.mov', '.webm', '.mkv'].includes(ext)) {
+    const frame = path.join(outDir, 'frame.png');
+    await extractFrame(assetPath, 0, frame);
+    return `../media/${shotId}/frame.png`;
+  }
+  const base = path.basename(assetPath);
+  await copyFile(assetPath, path.join(outDir, base));
+  return `../media/${shotId}/${encodeURIComponent(base)}`;
+}
+
+// 真实素材镜的合成：满幅画面 + 电影化调色（暗角/颗粒/轻推镜），与代码场景共用同一套转场与字幕
+function buildMediaComposition(
+  shotId: string,
+  src: string,
+  size: { w: number; h: number },
+  durationS: number,
+  rigScript = '',
+): string {
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #050505; }
+  .stage { position: relative; width: 100%; height: 100%; overflow: hidden; background: #050505; }
+  .frame { position: absolute; inset: 0; overflow: hidden; transform-origin: 50% 50%; }
+  .film { display: block; width: 100%; height: 100%; object-fit: cover; filter: saturate(0.88) contrast(1.07) brightness(0.96); }
+  .grade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,236,190,0.06), transparent 42%, rgba(6,8,14,0.32)); mix-blend-mode: soft-light; }
+  .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, transparent 44%, rgba(0,0,0,0.62) 100%); }
+  .grain { position: absolute; inset: 0; opacity: 0.13; mix-blend-mode: overlay; background-image: repeating-radial-gradient(circle at 30% 40%, rgba(255,255,255,0.10) 0 0.5px, transparent 0.6px 2.2px), repeating-radial-gradient(circle at 70% 60%, rgba(255,255,255,0.08) 0 0.4px, transparent 0.5px 1.8px); background-size: 3px 3px, 5px 5px; }
+</style>
+<script src="../motion/gsap.min.js"></script>
+</head>
+<body>
+<div data-composition-id="scene-${shotId}" data-width="${size.w}" data-height="${size.h}" data-duration="${durationS.toFixed(3)}" style="width:100%;height:100%">
+  <div class="stage">
+    <div class="frame"><img class="film" src="${src}" alt=""></div>
+    <div class="grade"></div>
+    <div class="vignette"></div>
+    <div class="grain"></div>
+  </div>
+</div>
+<script>
+window.__timelines = window.__timelines || {};
+window.__timelines['scene-${shotId}'] = window.gsap ? gsap.timeline({ paused: true }) : null;
+if (window.__timelines['scene-${shotId}']) {
+  window.__timelines['scene-${shotId}'].fromTo('.frame', { scale: 1.09 }, { scale: 1.0, duration: ${durationS.toFixed(3)}, ease: 'none' }, 0);
+}
+</script>
+${rigScript}
+</body>
+</html>
+`;
 }
 
 // V-CAP-001 排版感知：从场景 CSS 的 .subject 块读主语纵向位置，字幕落到对侧。
@@ -429,23 +716,53 @@ function hashJitter(seed: string): number {
   return Math.abs(h);
 }
 
-// 转场生成：剪切点处前一镜淡出、后一镜淡入（交叉溶解 0.5s）。
-// dissolve/slide 均以交叉溶解落地；'none' 不产生动画。
-function buildTransitionsScript(timeline: Timeline): string {
-  const DISSOLVE_S = 0.5;
-  const cuts: Array<{ out: string; inn: string; at: number }> = [];
+// 转场生成：每个词对应一种真正的画面处理，不再"一律淡到黑再亮起"。
+// 时长/重叠来自 transitions.ts（V-MOT-008：300-600ms）；硬切不产生任何动画。
+function buildTransitionsScript(
+  timeline: Timeline,
+  plans: Array<TransitionPlan | null>,
+): string {
+  const lines: string[] = [];
   for (let i = 1; i < timeline.shots.length; i += 1) {
-    const prev = timeline.shots[i - 1];
+    const plan = plans[i];
     const cur = timeline.shots[i];
-    if (!prev || !cur) continue;
-    if (cur.transition === 'none') continue;
-    cuts.push({ out: prev.shotId, inn: cur.shotId, at: +(cur.startMs / 1000).toFixed(3) });
+    const prev = timeline.shots[i - 1];
+    if (!plan || !cur || !prev || plan.kind === 'hard-cut') continue;
+    const att = +(cur.startMs / 1000).toFixed(3);
+    const dur = +(plan.durationMs / 1000).toFixed(3);
+    const t0 = +(att - plan.overlapMs / 1000).toFixed(3);
+    const inn = `#clip-${cur.shotId}`;
+    const out = `#clip-${prev.shotId}`;
+    if (plan.kind === 'dissolve') {
+      // 真交叉溶解：后镜在重叠窗内 0→1 盖在前镜上，前镜保持原亮度直到被完全覆盖
+      lines.push(`  tl.set('${inn}', { opacity: 0 }, ${t0});`);
+      lines.push(`  tl.to('${inn}', { opacity: 1, duration: ${dur}, ease: 'power2.inOut' }, ${t0});`);
+    } else if (plan.kind === 'wipe') {
+      lines.push(`  tl.set('${inn}', { clipPath: 'inset(0 100% 0 0)' }, ${t0});`);
+      lines.push(`  tl.to('${inn}', { clipPath: 'inset(0 0% 0 0)', duration: ${dur}, ease: 'power2.inOut' }, ${t0});`);
+    } else if (plan.kind === 'whip-pan') {
+      // 甩镜：方向按剪切序号交替，两侧同时位移+运动模糊，避免单侧拖影
+      const dir = i % 2 === 0 ? 1 : -1;
+      lines.push(`  tl.set('${inn}', { opacity: 0.25, xPercent: ${dir * 12}, filter: 'blur(14px)' }, ${t0});`);
+      lines.push(`  tl.to('${inn}', { opacity: 1, xPercent: 0, filter: 'blur(0px)', duration: ${dur}, ease: 'power2.out' }, ${t0});`);
+      lines.push(`  tl.to('${out}', { xPercent: ${-dir * 7}, filter: 'blur(10px)', duration: ${dur}, ease: 'power2.in' }, ${t0});`);
+    } else if (plan.kind === 'slide') {
+      // 横推：后镜从右侧整幅推入，遮住前镜；前镜不淡出，避免中间发黑
+      lines.push(`  tl.set('${inn}', { xPercent: 100 }, ${t0});`);
+      lines.push(`  tl.to('${inn}', { xPercent: 0, duration: ${dur}, ease: 'power3.inOut' }, ${t0});`);
+    } else if (plan.kind === 'fade-black') {
+      // 黑场过渡：仅风格包显式声明时使用（前镜先黑，后镜再从黑里浮出）
+      lines.push(`  tl.set('${inn}', { opacity: 0 }, ${t0});`);
+      lines.push(`  tl.to('${out}', { opacity: 0, duration: ${dur / 2}, ease: 'power2.in' }, ${t0});`);
+      lines.push(`  tl.to('${inn}', { opacity: 1, duration: ${dur / 2}, ease: 'power2.out' }, ${att});`);
+    } else if (plan.kind === 'smash-cut') {
+      // 冲击切：当帧闪白 + 后镜 6% 回弹，制造"啪"一下的喜剧落点
+      lines.push(`  tl.fromTo('${inn}', { scale: 1.06 }, { scale: 1, duration: ${dur}, ease: 'power2.out' }, ${att});`);
+      lines.push(`  tl.fromTo('#flash-${cur.shotId}', { opacity: 0 }, { opacity: 0.9, duration: 0.06, ease: 'power1.out' }, ${+(att - 0.02).toFixed(3)});`);
+      lines.push(`  tl.to('#flash-${cur.shotId}', { opacity: 0, duration: 0.22, ease: 'power1.in' }, ${+(att + 0.05).toFixed(3)});`);
+    }
   }
-  if (cuts.length === 0) return '';
-  const lines = cuts.map(
-    (c) => `  tl.to('#clip-${c.out}', { opacity: 0, duration: ${DISSOLVE_S / 2}, ease: 'power1.in' }, ${c.at - DISSOLVE_S / 2});
-  tl.fromTo('#clip-${c.inn}', { opacity: 0 }, { opacity: 1, duration: ${DISSOLVE_S / 2}, ease: 'power1.out' }, ${c.at - DISSOLVE_S / 2});`,
-  );
+  if (lines.length === 0) return '';
   return `(function () {
   var tl = window.__timelines && window.__timelines['root'];
   if (!tl) return;
@@ -453,7 +770,13 @@ ${lines.join('\n')}
 })();`;
 }
 
-function wrapComposition(sceneHtml: string, shotId: string, size: { w: number; h: number }, durationS: number): string {
+function wrapComposition(
+  sceneHtml: string,
+  shotId: string,
+  size: { w: number; h: number },
+  durationS: number,
+  rigScript = '',
+): string {
   let out = sceneHtml;
   // HyperFrames 契约：GSAP 必须先于 motion-lib 加载；时间线注册到 window.__timelines[compositionId]
   if (!out.includes('gsap.min.js')) {
@@ -483,7 +806,35 @@ function wrapComposition(sceneHtml: string, shotId: string, size: { w: number; h
       window.__shotDurationS = ${durationS.toFixed(3)};
       MV.use('scene-${shotId}');`,
   );
+  // 外层机位轨：放在所有场景脚本之后，确保它的 DOMContentLoaded 监听最后注册、rAF 最后执行
+  if (rigScript && !out.includes('data-mv-rig')) {
+    out = out.replace(
+      '</body>',
+      `${rigScript.replace('<script>', '<script data-mv-rig="1">')}\n</body>`,
+    );
+  }
   return out;
+}
+
+// 机位审计摘要（logs/camera-rig.json）：分段首尾构图足够定位问题，不必存整份 plan
+function rigSummary(rig: RigPlan): Record<string, unknown> {
+  return {
+    shotId: rig.shotId,
+    move: rig.move,
+    zoom: rig.zoom,
+    durationS: rig.durationS,
+    amp: rig.amp,
+    sign: rig.sign,
+    focus: rig.focus,
+    coverage: rig.coverage,
+    segments: rig.segments.map((s) => ({
+      atS: s.atS,
+      durationS: s.durationS,
+      from: s.from,
+      to: s.to,
+      ease: s.ease,
+    })),
+  };
 }
 
 async function appendLog(

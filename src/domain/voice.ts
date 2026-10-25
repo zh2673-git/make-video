@@ -30,7 +30,7 @@ export async function synthesizeVoice(
   };
   const issues = V.validateTimelineSync(
     [{ ...shot, voice: ref }],
-    { shots: [{ shotId: shot.id, startMs: 0, durationMs, transition: 'none' }], subtitles: [], sfx: [] },
+    { shots: [{ shotId: shot.id, startMs: 0, durationMs, transition: 'none', coverage: [], camera: 'none', motivation: '', audioShiftMs: 0 }], subtitles: [], sfx: [] },
   );
   if (V.hasError(issues)) {
     throw mvError(ERR.TTS, `旁白时长异常:\n${V.formatIssues(issues)}`);

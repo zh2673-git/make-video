@@ -141,17 +141,19 @@
       finalize(nodes, 'scale(' + scale.toFixed(3) + ')');
       return tl;
     }
+    /* 机位运动必须从镜首开始覆盖整段：不写 position 会被 GSAP 追加到时间线末尾，
+     * 等于整镜都没推进（此前实测 camera 起点被排到 46s，实际镜头只有十几秒） */
     if (move === 'push-in') {
       // Ken Burns 式缓推：覆盖镜头大部分时长（V-CAM-006 静态画面必须过相机运动）
-      tl.fromTo(nodes, { scale: 1 }, { scale: scale, duration: opts.duration || 12, ease: 'none' });
+      tl.fromTo(nodes, { scale: 1 }, { scale: scale, duration: opts.duration || 12, ease: 'none' }, 0);
     } else if (move === 'pull-out') {
-      tl.fromTo(nodes, { scale: scale + 0.06 }, { scale: 1, duration: opts.duration || 12, ease: 'none' });
+      tl.fromTo(nodes, { scale: scale + 0.06 }, { scale: 1, duration: opts.duration || 12, ease: 'none' }, 0);
     } else if (move === 'pan') {
-      tl.fromTo(nodes, { xPercent: -3, scale: scale }, { xPercent: 3, duration: opts.duration || 12, ease: 'none' });
+      tl.fromTo(nodes, { xPercent: -3, scale: scale }, { xPercent: 3, duration: opts.duration || 12, ease: 'none' }, 0);
     } else if (move === 'pan-left') {
-      tl.fromTo(nodes, { xPercent: 3, scale: scale }, { xPercent: -3, duration: opts.duration || 12, ease: 'none' });
+      tl.fromTo(nodes, { xPercent: 3, scale: scale }, { xPercent: -3, duration: opts.duration || 12, ease: 'none' }, 0);
     } else {
-      tl.set(nodes, { scale: scale });
+      tl.set(nodes, { scale: scale }, 0);
     }
     return tl;
   };
@@ -216,6 +218,141 @@
 
   MV.timeline = function () {
     return ensureTimeline();
+  };
+
+  /* ---------- 3D 原语（素材语言层：风格声明 css3d 时由场景调用） ----------
+   * 全部写成「有界 repeat 的 GSAP 补间」而不是 requestAnimationFrame：
+   * 渲染器逐帧 seek 时间线，动画必须是时间的纯函数，rAF 会脱离 seek 变成随机画面。
+   * 依赖父级 CSS 提供 perspective / transform-style: preserve-3d（场景模板负责）。 */
+
+  function depthOf(el) {
+    var d = parseFloat(el.getAttribute && el.getAttribute('data-depth'));
+    return isFinite(d) ? Math.max(0, Math.min(1, d)) : 0.5;
+  }
+
+  // 分层景深：按元素 data-depth（0 远→1 近）给不同的 z 位移与缩放，制造真纵深
+  MV.depth = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var strength = opts.strength || 1;
+    var dur = (opts.duration || 12000) / 1000;
+    for (var i = 0; i < nodes.length; i++) {
+      (function (n) {
+        var d = depthOf(n);
+        tl.fromTo(
+          n,
+          { z: -((1 - d) * 180) * strength, scale: 0.94 + d * 0.06, opacity: 0.5 + d * 0.5 },
+          { z: d * 60 * strength, scale: 1 + d * 0.08, opacity: 1, duration: dur, ease: 'none' },
+          0,
+        );
+      })(nodes[i]);
+    }
+    return tl;
+  };
+
+  // 透视倾斜摆动：旋转往复（有界 repeat），主体在 3D 空间里"呼吸"
+  MV.tilt3d = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var amp = opts.amp || 7;
+    var persp = opts.perspective || 1200;
+    tl.fromTo(
+      nodes,
+      { rotationX: amp, rotationY: -amp, transformPerspective: persp },
+      {
+        rotationX: -amp * 0.4,
+        rotationY: amp,
+        duration: (opts.duration || 1200) / 1000,
+        ease: 'sine.inOut',
+        repeat: 7,
+        yoyo: true,
+      },
+      0,
+    );
+    return tl;
+  };
+
+  // 转台：绕 Y 轴匀速转（有界 repeat，总长 16s 覆盖常规镜长）
+  MV.orbit = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var from = opts.from || 0;
+    var step = (opts.step || 45) * (opts.reverse ? -1 : 1);
+    tl.fromTo(
+      nodes,
+      { rotationY: from, transformPerspective: opts.perspective || 1200 },
+      {
+        rotationY: from + step,
+        duration: (opts.duration || 2000) / 1000,
+        ease: 'none',
+        repeat: opts.repeat === undefined ? 7 : opts.repeat,
+      },
+      0,
+    );
+    return tl;
+  };
+
+  // 卡片翻面：0 → 180，常速进出（信息揭示用）
+  MV.card3d = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    tl.fromTo(
+      nodes,
+      { rotationY: 0, transformPerspective: opts.perspective || 1000 },
+      {
+        rotationY: opts.to === undefined ? 180 : opts.to,
+        duration: (opts.duration || 600) / 1000,
+        ease: 'power2.inOut',
+      },
+      (opts.delay || 0) / 1000,
+    );
+    return tl;
+  };
+
+  // 立方体/立体字整体转动：两轴复合，有界往复
+  MV.spin3d = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var amp = opts.amp || 12;
+    tl.fromTo(
+      nodes,
+      { rotationX: -amp, rotationY: 0, transformPerspective: opts.perspective || 1400 },
+      {
+        rotationX: amp,
+        rotationY: amp * 2,
+        duration: (opts.duration || 2000) / 1000,
+        ease: 'sine.inOut',
+        repeat: 4,
+        yoyo: true,
+      },
+      0,
+    );
+    return tl;
   };
 
   global.MV = MV;

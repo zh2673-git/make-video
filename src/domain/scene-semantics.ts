@@ -4,6 +4,8 @@
  * 该模块是 template 模式的兜底语义引擎；真实 LLM 接线见 scene-forge.tryLlmScene。
  */
 
+import type { StyleVisual } from '../core/schema.js';
+
 export interface TemplateCue {
   template: string;
   cues: string[];
@@ -16,23 +18,66 @@ export const TEMPLATE_CUES: TemplateCue[] = [
   { template: 'flow', cues: ['首先', '然后', '接着', '随后', '最终', '于是', '步骤', '过程', '经过', '直到', '接着', '开始', '形成'] },
   { template: 'atmosphere', cues: ['深', '暗', '寂静', '浩瀚', '旋转', '悬浮', '漂浮', '遥远', '寂静无声', '光芒', '黑暗'] },
   { template: 'comic-symbol', cues: ['想象', '好比', '就像', '例如', '比方说', '打比方', '符号', '标志性的'] },
+  // 3D 素材语言（风格 visuals.sceneBias 引入时才在候选池里，语义命中才会被选中）
+  { template: 'iso-stage', cues: ['结构', '搭建', '框架', '立体', '空间', '舞台', '坐标', '层级', '齿轮', '机器'] },
+  { template: 'depth-layers', cues: ['纵深', '层叠', '远近', '深处', '走进', '穿进', '镜头拉', '望向', '背后'] },
 ];
 
-export function bestTemplate(narration: string, allowed: string[]): { template: string; score: number } | null {
+/**
+ * 风格 → 素材池（V-STYLE-008）：风格说禁用的一律剔除，说偏好的提到候选池最前。
+ * 偏好只影响排序与兜底，不硬塞镜头——真正的镜头语义仍由分镜/LLM 决定。
+ */
+export function applyStyleVisualPool(templates: string[], visuals: StyleVisual | undefined): string[] {
+  if (!visuals) return templates;
+  const deny = new Set(visuals.sceneDeny);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const t of [...visuals.sceneBias, ...templates]) {
+    if (!t || deny.has(t) || seen.has(t)) continue;
+    seen.add(t);
+    out.push(t);
+  }
+  // 全被禁用属于风格配置过窄：宁可回退原池让工程能出片，漂移由 V-STYLE-008 审计记录
+  return out.length > 0 ? out : templates;
+}
+
+export function bestTemplate(
+  narration: string,
+  allowed: string[],
+  bias: string[] = [],
+): { template: string; score: number } | null {
   const t = narration.toLowerCase();
+  const rank = (name: string): number => {
+    const i = bias.indexOf(name);
+    return i < 0 ? Number.MAX_SAFE_INTEGER : i;
+  };
   let best: { template: string; score: number } | null = null;
   for (const cue of TEMPLATE_CUES) {
     if (!allowed.includes(cue.template)) continue;
     const score = cue.cues.reduce((acc, c) => (t.includes(c.toLowerCase()) ? acc + 1 : acc), 0);
-    if (score > 0 && (!best || score > best.score)) best = { template: cue.template, score };
+    if (score <= 0) continue;
+    // 同分时风格偏好靠前的优先——素材形态要服从风格，而不是字典顺序
+    if (
+      !best ||
+      score > best.score ||
+      (score === best.score && rank(cue.template) < rank(best.template))
+    ) {
+      best = { template: cue.template, score };
+    }
   }
   return best;
 }
 
-export function pickTemplateBySemantics(narration: string, allowed: string[]): string {
-  const best = bestTemplate(narration, allowed);
+export function pickTemplateBySemantics(
+  narration: string,
+  allowed: string[],
+  bias: string[] = [],
+): string {
+  const best = bestTemplate(narration, allowed, bias);
   if (best) return best.template;
-  // 无线索命中 → allowed 中非氛围类的基础形式（typography 优先，陈述/定义的主力）
+  // 无线索命中 → 风格偏好的第一个（若有），否则基础陈述形式 typography
+  const preferred = bias.find((b) => allowed.includes(b));
+  if (preferred) return preferred;
   return allowed.find((x) => x === 'typography') ?? allowed[0] ?? 'typography';
 }
 

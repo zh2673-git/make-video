@@ -1,4 +1,4 @@
-import type { Project, Timeline } from '../schema.js';
+import { normalizeCameraToken, type Project, type Timeline } from '../schema.js';
 import { SYNC_TOLERANCE_MS } from '../constants.js';
 import { err, warn, type Issue } from './types.js';
 
@@ -28,6 +28,8 @@ export function validateTimelineSync(shots: Project['shots'], timeline: Timeline
   return issues;
 }
 
+// V-RHY-002 心理眨眼铁律（修订）：禁止"按字数均分"的无动机切镜。
+// 句中切必须给出理由——句读停顿 / 切点动机 / 景别或色温变化 / 重音词落点，四者任一即可。
 export function validateCutPoints(shots: Project['shots'], timeline: Timeline): Issue[] {
   const issues: Issue[] = [];
   for (let i = 1; i < timeline.shots.length; i += 1) {
@@ -35,11 +37,78 @@ export function validateCutPoints(shots: Project['shots'], timeline: Timeline): 
     const cur = timeline.shots[i];
     if (!prev || !cur) continue;
     const prevShot = shots.find((s) => s.id === prev.shotId);
-    if (prevShot && !/[，。！？；.!?;]$/.test(prevShot.narration.trim())) {
+    const curShot = shots.find((s) => s.id === cur.shotId);
+    if (!prevShot) continue;
+    if (/[，。！？；.!?;]$/.test(prevShot.narration.trim())) continue;
+    const hasMotivation = Boolean(cur.motivation);
+    const zoomChange = prevShot.zoom !== (curShot?.zoom ?? prevShot.zoom);
+    const tempChange = prevShot.colorTemp !== curShot?.colorTemp;
+    const emphasisCut = (curShot?.visual.params['emphasisLanding'] as boolean) === true;
+    if (!hasMotivation && !zoomChange && !tempChange && !emphasisCut) {
       issues.push(
-        err('V-RHY-002', `剪切点 ${prev.shotId}→${cur.shotId} 落在句中（无句读边界，心理眨眼铁律）`),
+        err('V-RHY-002', `剪切点 ${prev.shotId}→${cur.shotId} 落在句中且无切点动机（按字数均分切镜）`),
       );
     }
+  }
+  return issues;
+}
+
+// V-RHY-010 全片运动配比（修订）：静止是合法选择，但不能成为默认。
+// 专业依据：静止构图 + 镜内表演是成熟的镜头语言（Bordwell《电影艺术》；
+// 小津、北野武、死板喜剧），"幻灯片"的问题是**画面里什么都不动**，而不是没有外层机位。
+// 因此不再逐镜告警，只统计两件事：静止占比过高（>60%）、全片运动式 <2 种（切点必然机械）。
+export function validateIntraShotMotion(timeline: Timeline): Issue[] {
+  const issues: Issue[] = [];
+  const total = timeline.shots.length;
+  if (total === 0) return issues;
+  const staticIds: string[] = [];
+  const moves = new Set<string>();
+  for (const t of timeline.shots) {
+    const move = normalizeCameraToken(t.camera) ?? 'static';
+    if (move === 'static') staticIds.push(t.shotId);
+    else moves.add(move);
+  }
+  if (staticIds.length / total > 0.6) {
+    issues.push(
+      warn(
+        'V-RHY-010',
+        `静止镜 ${staticIds.length}/${total} 超过 60%（${staticIds.slice(0, 4).join('/')}…）：静止是选择，不该是默认`,
+      ),
+    );
+  }
+  if (total >= 6 && moves.size < 2) {
+    issues.push(
+      warn('V-RHY-010', `全片机位运动单一（仅 ${[...moves].join('/') || '全静止'}），切点必然机械`),
+    );
+  }
+  return issues;
+}
+
+// V-RHY-011 切点动机：镜间切必须声明动机（match-cut/action/eye-line/emotion/beat/zoom-jump）；
+// 转场词只说明「怎么接」，不说明「为什么切」，因此不计入动机；缺失聚合成一条 warn 防刷屏
+export function validateCutMotivation(timeline: Timeline): Issue[] {
+  const issues: Issue[] = [];
+  const kinds = new Set<string>();
+  const missing: string[] = [];
+  for (let i = 1; i < timeline.shots.length; i += 1) {
+    const cur = timeline.shots[i]!;
+    if (!cur.motivation) {
+      missing.push(cur.shotId);
+      continue;
+    }
+    kinds.add(cur.motivation);
+  }
+  if (missing.length > 0) {
+    const head = missing.slice(0, 4).join('/');
+    const more = missing.length > 4 ? ` 等 ${missing.length} 处` : '';
+    const total = Math.max(1, timeline.shots.length - 1);
+    const pct = Math.round((missing.length / total) * 100);
+    issues.push(
+      warn('V-RHY-011', `剪切点未声明动机 ${missing.length}/${total}（${pct}%）：${head}${more}`),
+    );
+  }
+  if (timeline.shots.length >= 6 && kinds.size < 2) {
+    issues.push(warn('V-RHY-011', `全片切点动机单一（${[...kinds].join('/') || '无'}）`));
   }
   return issues;
 }
@@ -111,16 +180,20 @@ export function validateCutCandidates(shots: Project['shots'], timeline: Timelin
     const atZoomChange = prevShot.zoom !== curShot.zoom;
     const atTempChange = prevShot.colorTemp !== undefined && prevShot.colorTemp !== curShot.colorTemp;
     const atEmphasis = (curShot.visual.params['emphasisLanding'] as boolean) === true;
-    if (!atSentenceEnd && !atZoomChange && !atTempChange && !atEmphasis) {
+    // 声明了切点动机（动作/视线/情绪/节拍/match-cut）同样是合法候选：剪辑语言优先于句读对齐
+    const atMotive = Boolean(cur.motivation);
+    if (!atSentenceEnd && !atZoomChange && !atTempChange && !atEmphasis && !atMotive) {
       issues.push(
-        err('V-RHY-001', `剪切点 ${prev.shotId}→${cur.shotId} 不在候选集（句读/重音词/景别/色温）`),
+        err('V-RHY-001', `剪切点 ${prev.shotId}→${cur.shotId} 不在候选集（句读/重音词/景别/色温/切点动机）`),
       );
     }
   }
   return issues;
 }
 
-// V-RHY-004 重音三联动：关键词落点 = 字幕高亮 + 主体 pulse + 相机微推（error）
+// V-RHY-004 重音载体（修订）：字幕高亮 / 主体反应 / 机位或覆盖切，三路里至少两路。
+// 为什么不再要求三路全中：重音靠"切、表演、光、声"任一路都能落地（Murch：情绪优先）；
+// 静止镜没有机位腿时，主体 pulse + 高亮已足以把重音送到观众眼里。
 export function validateEmphasisTriangle(
   shots: Project['shots'],
   timeline: Timeline,
@@ -134,16 +207,23 @@ export function validateEmphasisTriangle(
       (c) => c.shotId === t.shotId && c.keywords.length > 0,
     );
     const hasPulse = scenePulse.get(t.shotId) === true;
-    const hasCameraPush = shot.camera !== 'none';
-    if (!hasHighlight || !hasPulse || !hasCameraPush) {
+    const moving = (normalizeCameraToken(shot.camera) ?? 'static') !== 'static';
+    const hasCamera = moving || (t.coverage?.length ?? 0) > 0;
+    const carriers = [hasHighlight, hasPulse, hasCamera].filter(Boolean).length;
+    if (carriers < 2) {
       const missing = [
         !hasHighlight ? '字幕高亮' : '',
         !hasPulse ? '主体pulse' : '',
-        !hasCameraPush ? '相机微推' : '',
+        !hasCamera ? '机位运动/覆盖切' : '',
       ]
         .filter(Boolean)
         .join('/');
-      issues.push(err('V-RHY-004', `镜头 ${t.shotId} 重音三联动缺失：${missing}`));
+      issues.push(
+        err(
+          'V-RHY-004',
+          `镜头 ${t.shotId} 重音落点不足（${carriers}/3 路载体，缺：${missing}）——至少两路`,
+        ),
+      );
     }
   }
   return issues;

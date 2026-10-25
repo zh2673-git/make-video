@@ -25,6 +25,35 @@ description: 自动生成视频 skill：输入主题/讲稿/素材，按电影�
    `full`=整句条（关键词句内高亮，不再叠加独立黄词条）；`keyword`=关键词梗卡
    （贴纸式卡片、微倾角+水平错位、按场景主语位置放对侧避让主体）；`off`=无画面
    字幕（srt 仍全量导出）。project.json 顶层 `"subtitlePolicy"` 可覆写。
+5. **转场按词表裁决，不默认设置**（docs/08 ④ + V-MOT-008）：`hard-cut` /
+   `smash-cut` / `dissolve` / `whip-pan` / `wipe` / `slide` / `fade-black` 七类；
+   除硬切外均为 300-600ms，溶解/擦除/横推通过**视觉轨重叠**实现（两镜同框交叠），
+   **禁止淡到黑再亮起**；`fade-black` 只给显式声明它的风格包用；音频仍按原剪切点入。
+   风格包 `transitions` 之外的词一律回退并写审计日志。
+   **转场由切点动机裁决**：每镜 `motivation` 写清这一刀为什么切（match-cut / 动作 /
+   视线 / 情绪 / 节拍 / 景别跳）；`transition` 留空或写 `auto` 时按动机自动选型
+   （情绪→溶解，动作·节拍→冲击切，其余硬切）；相邻镜 `exitAnchor == enterAnchor`
+   自动判 match-cut 硬切。动机来源三级：导演文案 > match-cut 锚点 > 结构关系反推
+   （景别跨两档/同场方位反转/笑点落镜）；审计落 `logs/cut-audit.json`（含
+   `motiveSource` 与缺失比例，V-RHY-011）。
+6. **一镜可以是一张图，也可以是一次机位运动**（docs/05 camera-rig + V-CAM-002/010）：
+   动不动由你决定——`static/none` 是真静止（定帧 + 镜内表演，Lumet「没有理由就不动机位」），
+   不是漏填。要动时外层机位按景别 × 镜长给行程、`.subject` 给焦点、构图定方向，三段式
+   「进入 settle → 主体漂移 → **减速落定**」；急推收势（`cameraPunchOut`）是标点，
+   全片 ≤2 次。逐镜可用 `cameraAmp`（0-2.5）调行程、`cameraDir` 定方向。
+   长镜可用 `coverage` 声明镜内换机位点（重音词自动派生默认关闭，需 `autoCoverage: true`），
+   切点硬跳不插值——同场景换机位是「覆盖」，整场换画布才是「转场」。
+   轨迹落 `logs/camera-rig.json`。软转场默认 J-cut：旁白提前 90ms 入（`audioShiftMs`），
+   只移音频 clip 落点，不动时间线时长（V-CMP-001 不破）。
+7. **真实素材默认关闭、显式开启**：零配置时零网络零付费，只用代码绘制；用户配置
+   `MAKEVIDEO_PEXELS_API_KEY` 后才可用 `stock` 检索/下载；也可让用户直接把图片/视频
+   放进 `materials/` 用 `add-material` 入库。未配置时主动提示获取免费 key 或提供素材，
+   不得擅自联网下载、不得付费。
+8. **风格决定素材，不只是配色**（docs/11 `visuals` + V-STYLE-008）：风格包声明
+   `dimension`（2d / css3d / mixed）、签名母题、偏好与禁用形态；分镜候选池先按
+   `sceneDeny` 剔除、`sceneBias` 前置，LLM 只能在池内选。`css3d` 风格用
+   `MV.depth/orbit/tilt3d/card3d/spin3d` 做真透视（父级必须 `perspective` +
+   `preserve-3d`），2D 风格不得混入 3D 痕迹——漂移会被 V-STYLE-008 记录。
 
 ## 风格菜单（用户叫法 → 风格包）
 
@@ -50,6 +79,10 @@ description: 自动生成视频 skill：输入主题/讲稿/素材，按电影�
 | 卡点/MV/混剪 | `mtv-beat` | 节拍剪辑+速度斜坡（规划，依赖 beats） | promo/news | C |
 
 菜单未命中 → 先按六轴找最近 recipe+style（匹配优先），差异大才走沉淀。
+**素材语言速查**：`comedy-pop`=css3d（立体字/转台卡阵只在梗落点）；`cinematic-dark`=mixed
+（纵深合成）；`keynote-minimal`/`kurzgesagt-explainer`/`anderson-symmetry`/`noir-contrast`/
+`bass-graphic`=2d，并禁用立体舞台/纵深模板。用户点名「要 3D/立体/空间感」而所选风格是 2d 时，
+先建议换到 css3d/mixed 包或走风格沉淀，不要私自越维。
 **新需求组装公式：成品 = recipe（结构）× style（部门指令）× override（参数覆写）**
 （示例：迪士尼童话 = story-narrative × pixar-2d + 借 ghibli 纸感 override）。
 
@@ -87,6 +120,8 @@ make-video storyboard                          # 导演批注+分镜+确认表�
 make-video draw [--shot sXX]                   # 场景代码生成（模板兜底）
 make-video scene --shot sXX --from <html>      # agent/人工原创场景接入（默认工作方式）
 make-video import --shot sXX --from <源>       # 素材导入（外部视频抽帧/他项目资产）
+make-video stock <关键词> [--project <id>] [--type image|video] [--count N]
+                    [--download] [--shot sXX]     # 真实素材检索/下载（需 key，默认关闭）
 make-video voice [--shot sXX] [--from <文件>]  # 旁白（TTS 或用户录音，实测时长=时间真源）
 make-video compose                             # 质量闸门+时间线+合成项目
 make-video render [-o out.mp4]                 # 渲染（doctor+锁+输出校验）
@@ -115,6 +150,13 @@ make-video confirm                             # 确认分镜表，放行采购
    `draw` 的模板 forge 与语义轮转只是**无 agent 时的兜底**，禁止拿它交差——
    镜头画面的意义对位（"根据剧本拍电影"）不可外包给轮转模板。
    已落盘场景受幂等保护，重生成须显式 `make-video clean`。
+9. **切点与机位自检**：合成后看 `logs/cut-audit.json`——每个切点必须带动机或落的候选集，
+   全片动机不得只剩一种；看 `logs/camera-rig.json`——末段应减速落定（`power2.out`），
+   静止镜应是 `segments: []`（真静止），全片静止占比 ≤60%、运动式 ≥2 种。
+   任一条不满足，先改分镜/动机，不要靠换转场词糊过去。
+10. **素材自检**：合成前确认每镜模板在风格池内（`visuals.sceneDeny` 未命中），
+    `css3d` 风格的场景真的调用了 3D 原语、`2d` 风格没混进 3D；V-STYLE-008 的
+   warn 要么修画面，要么改风格声明，不允许「配色像、素材不像」的混搭交差。
 
 ## 方案文档树（深入设计与理论锚点）
 

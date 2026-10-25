@@ -1,4 +1,5 @@
 import type { Project } from '../schema.js';
+import { isCameraToken } from '../schema.js';
 import { err, warn, type Issue } from './types.js';
 
 export function validateStoryboard(p: Project): Issue[] {
@@ -14,8 +15,13 @@ export function validateStoryboard(p: Project): Issue[] {
   }
 
   for (const s of shots) {
-    if (!s.motivation) {
-      issues.push(err('V-CAM-002', `镜头 ${s.id} 缺少相机运动动机声明`));
+    // V-CAM-002（修订）：词表合法即可——static/none 是导演的合法选择（静止构图 + 镜内表演，
+    // 小津/北野武/死板喜剧都靠它），不再当"幻灯片"报错；全片画面是否够活由 V-RHY-010 统计，
+    // 重音是否落到画面由 V-RHY-004 管。这里只拦没登记的词（拼错会静默退化成静止）。
+    if (!isCameraToken(s.camera)) {
+      issues.push(
+        err('V-CAM-002', `镜头 ${s.id} 运镜词「${s.camera}」不在词表（push-in/pull-out/pan/pan-left/tilt-up/tilt-down/static/none）`),
+      );
     }
     if (!s.counterpoint) {
       issues.push(err('V-CP-002', `镜头 ${s.id} 未选对位模式`));

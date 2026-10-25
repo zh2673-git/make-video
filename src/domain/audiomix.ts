@@ -86,17 +86,32 @@ export async function buildSfx(dir: string): Promise<{ whoosh: string; hit: stri
   return { whoosh, hit };
 }
 
-// 混音计划（A9 工件）：whoosh@每个转场剪切点；hit@重音镜起点（V-SND-003 落点对齐）
-export function planMix(project: Project, timeline: Timeline, audioDir: string): MixPlan {
+// 混音计划（A9 工件）：音效按转场类型分流，只在"有运动/有冲击"的切点落
+// —— 硬切和溶解本身不需要音效，早期对每个切点都塞同一条 whoosh 会让全片变成"嗖嗖嗖"。
+// whoosh@甩镜/擦除/横推（有真实横向运动）；hit@冲击切与重音镜（V-SND-003 落点对齐）。
+// leadMs 让 whoosh 早于切点起势（声音先入的 J-cut）；atMs 仍锚在视觉切点，审计口径不变。
+export function planMix(
+  project: Project,
+  timeline: Timeline,
+  audioDir: string,
+  transitionPlans?: Array<{ kind: string } | null>,
+): MixPlan {
   const cues: MixPlan['sfxCues'] = [];
-  for (const t of timeline.shots) {
+  const hasHit = (atMs: number): boolean =>
+    cues.some((c) => c.kind === 'hit' && c.atMs === atMs);
+  for (const [i, t] of timeline.shots.entries()) {
     if (t.transition !== 'none' && t.startMs > 0) {
-      cues.push({ file: 'audio/sfx/whoosh.wav', atMs: t.startMs, kind: 'whoosh' });
+      const kind = transitionPlans?.[i]?.kind ?? 'hard-cut';
+      if (kind === 'smash-cut') {
+        cues.push({ file: 'audio/sfx/hit.wav', atMs: t.startMs, kind: 'hit', leadMs: 0 });
+      } else if (kind === 'whip-pan' || kind === 'wipe' || kind === 'slide') {
+        cues.push({ file: 'audio/sfx/whoosh.wav', atMs: t.startMs, kind: 'whoosh', leadMs: -60 });
+      }
     }
     const shot = project.shots.find((s) => s.id === t.shotId);
     const seg = project.script?.segments.find((x) => x.id === shot?.segmentId);
-    if (seg?.mood === 'tense' || seg?.mood === 'awe') {
-      cues.push({ file: 'audio/sfx/hit.wav', atMs: t.startMs, kind: 'hit' });
+    if ((seg?.mood === 'tense' || seg?.mood === 'awe') && !hasHit(t.startMs)) {
+      cues.push({ file: 'audio/sfx/hit.wav', atMs: t.startMs, kind: 'hit', leadMs: 0 });
     }
   }
   return {
@@ -104,7 +119,7 @@ export function planMix(project: Project, timeline: Timeline, audioDir: string):
     tracks: [
       { kind: 'vo', file: path.join(audioDir, 'vo-mix.wav'), gainDb: 0 },
       { kind: 'bgm', file: path.join(audioDir, 'bgm.wav'), gainDb: 0 },
-      { kind: 'sfx', file: path.join(audioDir, 'sfx'), gainDb: -4 },
+      { kind: 'sfx', file: path.join(audioDir, 'sfx'), gainDb: -6 },
     ],
     duckRatio: DUCK_RATIO,
     sfxCues: cues,

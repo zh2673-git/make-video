@@ -58,9 +58,10 @@ export async function adoptSceneFile(
   project: Project,
   shotId: string,
   file: string,
+  pack?: import('../core/schema.js').StylePack,
 ): Promise<{ adopted: boolean; issues: import('../core/index.js').Issue[] }> {
   const { adoptScene } = await import('../domain/scene-forge.js');
-  const r = await adoptScene(store, project, shotId, file);
+  const r = await adoptScene(store, project, shotId, file, pack);
   if (r.adopted) {
     if (project.timeline) project.timeline = undefined;
     await store.save(project);

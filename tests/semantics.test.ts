@@ -40,6 +40,28 @@ describe('场景语义分配（根据剧本拍电影）', () => {
     expect(b.program).not.toBe('s03'); // 不与上一个重复
   });
 
+  it('离线分镜给出切点动机与机位变化，转场留空交给剪辑部裁决', async () => {
+    const llm = new TemplateLlmClient();
+    const raw = await llm.generate({
+      kind: 'storyboard',
+      payload: {
+        segments: [
+          { id: 'seg-1', text: '先看全景。' },
+          { id: 'seg-2', text: '忽然推到脸上。' },
+        ],
+        directorNotes: [],
+        templates: ['typography'],
+        shotScaleBias: ['ELS', 'CU'],
+        materialDecisions: [],
+      },
+    });
+    const shots = raw as Array<{ motivation: string; camera: string; transition: string }>;
+    expect(shots[0]!.motivation).toBe('');
+    expect(shots[1]!.motivation).toContain('景别跳');
+    expect(shots.every((s) => s.camera !== 'none')).toBe(true);
+    expect(shots.every((s) => s.transition === '')).toBe(true);
+  });
+
   it('templateStoryboard 端到端：同语义段不再按索引轮转，同形异义段拿到不同模板', () => {
     const llm = new TemplateLlmClient();
     return llm.generate({

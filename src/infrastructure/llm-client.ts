@@ -57,7 +57,9 @@ function buildPrompt(task: LlmTask): Array<{ role: string; content: string }> {
   const sys =
     task.kind === 'scene'
       ? SCENE_SYSTEM_PROMPT
-      : `你是视频编译器的${task.kind}部门引擎。只输出合法 JSON，遵守给定 schema。`;
+      : task.kind === 'storyboard'
+        ? STORYBOARD_SYSTEM_PROMPT
+        : `你是视频编译器的${task.kind}部门引擎。只输出合法 JSON，遵守给定 schema。`;
   return [
     { role: 'system', content: sys },
     { role: 'user', content: JSON.stringify(task.payload) },
@@ -74,7 +76,25 @@ const SCENE_SYSTEM_PROMPT = `你是视频编译器的美术摄影部场景画师
 4. 主语唯一（.subject 或 .title 等恰好 1 个），辅助元素 opacity ≤ 0.7，同屏运动元素 ≤ 3、位移方向 ≤ 2。
 5. 禁止属性 data-start/data-duration/data-track-index（时序只归剪辑部）；禁止 repeat:-1；位移不得 ease:'none' 急停。
 6. 颜色只用给定 token（{{PRIMARY}} 等替换后的真实值），字体只用给定 fontFamily，字号用给定 px。
-7. 若给了相机与景别，用 MV.camera('.stage', { move, zoom }) 表达；静态画面必须有相机运动。`;
+7. 若给了相机与景别，用 MV.camera('.stage', { move, zoom }) 表达；静态画面必须有相机运动。
+8. 素材语言（payload.styleVisual）必须遵守：dimension=css3d 时至少用一个 3D 原语（MV.tilt3d/orbit/depth/card3d/spin3d），并给容器 perspective 与 transform-style:preserve-3d；dimension=2d 时禁止任何 3D 属性（perspective/rotate3d/translateZ）。motifs 是这一派允许的母题，texture 是允许的纹理层，styleVisual.note 是素材语言的一句话定义——场景必须长成这一派的样子，不能只换配色。`;
+
+/** 分镜系统提示词（docs/04 导演部 A5）：动机是「为什么切」，不是「这镜拍什么」 */
+const STORYBOARD_SYSTEM_PROMPT = `你是视频编译器的导演部（导演+分镜师）。根据讲稿段落与导演批注输出分镜数组。只输出合法 JSON 数组，每个元素是一镜。
+
+每镜字段：
+- segmentId / narration（必须原样使用该段旁白）/ visual（kind、prompt、template、params）
+- zoom：ELS|LS|MS|CU|ECU；camera：push-in|pull-out|pan|pan-left|tilt-up|tilt-down|static。
+  **static 是合法选择**（定格 + 镜内表演，喜剧常用），不是漏填；但全片静止镜别超过 40%，
+  运镜也别每镜同一式——镜头长短决定行程：短促节拍镜别给长推轨。
+- motivation：**切点动机**——只写「为什么从上一镜切到这一镜」，必须能归入下列之一：match-cut（同形接续）/ 动作接动作 / 视线接视线 / 情绪转场 / 节拍打点 / 景别跳。禁止写「静态呈现」「定场揭示」这类镜头内容描述；想不出理由就留空。
+- transition：留空或 "auto"，让剪辑部按动机裁决；只有确实需要时才显式写 hard-cut/dissolve/smash-cut/wipe/whip-pan/slide。
+- enterAnchor / exitAnchor：形状锚点 id（如 "circle""desk"）。相邻两镜 exitAnchor==enterAnchor 时剪辑部会自动判 match-cut 硬切。
+- coverage：长镜（旁白 >4s）内的换机位点，**可选、默认不派生**，最多 3 条：{at:0-1, kind:"punch-in"|"reframe", scale:0.8-1.6, xPercent:-12~12, yPercent:-12~12, rotation:-3~3, motivation:"emphasis"}。只有你确实想在这个词上换机位时才写；不写就一镜到底。
+
+节奏纪律：景别要有序列（ELS→LS→MS→CU→ECU 递进或跳切），相邻镜不要同景别同机位同转场；每 2-3 秒给一次视觉变化（可以是主体表演/图形动效，不必都靠机位）。
+
+素材纪律：templates 是**风格筛过的候选池**（payload.styleVisual 说明这一派的素材语言：维度/母题/偏好/禁用），visual.template 只能从池中选；池里有 3D 形态（iso-stage/depth-layers）时，需要纵深/结构的镜头优先用它们，别全片退回平面排版。visual.params 可带 depth（0-1 纵深强度）等风格参数。`;
 
 export interface LlmRetryClient extends LlmClient {
   readonly inner: LlmClient;
@@ -198,22 +218,30 @@ interface StoryboardPayload {
   segments: Array<{ id: string; text: string; beat?: string }>;
   directorNotes: Array<{ segmentId: string; visualIntent: string; counterpoint: string }>;
   templates: string[];
+  styleVisual?: { dimension?: string; sceneBias?: string[]; sceneDeny?: string[]; motifs?: string[] };
   shotScaleBias: string[];
   materialDecisions: Array<{ segmentId: string; kind: string; source?: string; reason: string }>;
 }
 
 function templateStoryboard(payload: Record<string, unknown>): unknown {
   const p = payload as unknown as StoryboardPayload;
+  const bias = p.styleVisual?.sceneBias ?? [];
+  // 风格禁用的形态即使混进候选池也不选
+  const deny = new Set(p.styleVisual?.sceneDeny ?? []);
+  const templates = p.templates.filter((t) => !deny.has(t));
   const noteBy = new Map(p.directorNotes.map((n) => [n.segmentId, n]));
   const decBy = new Map(p.materialDecisions.map((d) => [d.segmentId, d]));
   const zooms = p.shotScaleBias.length ? p.shotScaleBias : ['MS', 'CU'];
   // 模板按旁白语义分配（禁止索引轮转——"凑镜头数"的根源）：
   // canvas 程序按内容主题选（s01 引力钩子…s08 终幕），MV 模板按叙事形式选（流程/对比/数据/氛围）
-  const canvasPrograms = p.templates
+  const canvasPrograms = templates
     .filter((t) => t.startsWith('canvas:'))
     .map((t) => t.slice('canvas:'.length));
-  const mvTemplates = p.templates.filter((t) => !t.startsWith('canvas:'));
+  const mvTemplates = templates.filter((t) => !t.startsWith('canvas:'));
   const recentUsed: string[] = [];
+  // P2：离线分镜也要给出「为什么切」——动机由景别关系/内容线索反推，机位按叙事轮换
+  const CAMERA_CYCLE = ['push-in', 'pan', 'push-in', 'pull-out', 'tilt-up', 'pan-left'];
+  let prevZoom = '';
   return p.segments.map((seg, i) => {
     const note = noteBy.get(seg.id);
     const dec = decBy.get(seg.id);
@@ -221,7 +249,7 @@ function templateStoryboard(payload: Record<string, unknown>): unknown {
     if (canvasPrograms.length > 0) {
       // 混合评分：强语义 MV 形式（数据/对比 ≥2 线索命中）压过程序化背景，
       // 让数字段出真图表、对比段出真对峙卡——异质画面形式打破"暗场小元素"的同质感
-      const mv = mvTemplates.length > 0 ? bestTemplate(seg.text, mvTemplates) : null;
+      const mv = mvTemplates.length > 0 ? bestTemplate(seg.text, mvTemplates, bias) : null;
       if (mv && mv.score >= 2) {
         template = mv.template;
       } else {
@@ -230,8 +258,12 @@ function templateStoryboard(payload: Record<string, unknown>): unknown {
         template = `canvas:${pick.program}`;
       }
     } else {
-      template = pickTemplateBySemantics(seg.text, mvTemplates.length ? mvTemplates : ['typography']);
+      template = pickTemplateBySemantics(seg.text, mvTemplates.length ? mvTemplates : ['typography'], bias);
     }
+    const zoom = zooms[i % zooms.length] ?? 'MS';
+    const motivation =
+      i === 0 ? '' : relationReason(prevZoom, zoom, note?.counterpoint ?? 'metaphor', seg.text);
+    prevZoom = zoom;
     return {
       segmentId: seg.id,
       narration: seg.text,
@@ -242,12 +274,26 @@ function templateStoryboard(payload: Record<string, unknown>): unknown {
         params: { scene: `scene-${i + 1}`, side: 'center' },
         ...(dec?.source ? { source: dec.source } : {}),
       },
-      zoom: zooms[i % zooms.length] ?? 'MS',
-      camera: i === 0 ? 'push-in' : 'none',
-      motivation: i === 0 ? '定场揭示' : '静态呈现',
+      zoom,
+      camera: CAMERA_CYCLE[i % CAMERA_CYCLE.length] ?? 'push-in',
+      motivation,
       counterpoint: note?.counterpoint ?? 'metaphor',
+      // 转场留空 = auto，由剪辑部按动机裁决（P2：转场不再是索引轮转的装饰）
+      transition: '',
     };
   });
+}
+
+const ZOOM_RANK: Record<string, number> = { ELS: 0, LS: 1, MS: 2, CU: 3, ECU: 4 };
+
+/** 离线分镜的切点动机：先看客观景别关系，再看内容线索，判不出就留空（不编理由） */
+function relationReason(prevZoom: string, zoom: string, counterpoint: string, text: string): string {
+  const gap = Math.abs((ZOOM_RANK[prevZoom] ?? 2) - (ZOOM_RANK[zoom] ?? 2));
+  if (gap >= 2) return `景别跳：${prevZoom}→${zoom}，换尺度换信息`;
+  if (/(冲|甩|撞|砸|掀|推倒|跑|追|爆|抢)/.test(text)) return '动作接动作，气口不断';
+  if (counterpoint === 'parody') return '接节拍：笑点落镜';
+  if (/(沉默|安静|回忆|忽然|那一刻|原来|停顿|缓缓)/.test(text)) return '情绪转场，慢下来';
+  return '';
 }
 
 interface StyleAnalyzePayload {

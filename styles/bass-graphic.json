@@ -97,5 +97,24 @@
     "review": "v1 对拍验收"
   },
   "references": "references.md",
-  "antiPatterns": "anti-patterns.md"
+  "antiPatterns": "anti-patterns.md",
+  "visuals": {
+    "dimension": "2d",
+    "motifs": [
+      "cutout",
+      "bold-type",
+      "graphic-band"
+    ],
+    "sceneBias": [
+      "typography",
+      "flow"
+    ],
+    "sceneDeny": [
+      "depth-layers"
+    ],
+    "texture": [
+      "paper"
+    ],
+    "note": "高对比剪纸与图形条带，运动发生在排版层而非镜头里"
+  }
 }

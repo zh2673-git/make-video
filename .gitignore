@@ -4,6 +4,8 @@ dist/
 projects/
 gen-scenes/
 gen-scenes-intro/
+tmp/
+project-development-prompt.md
 .codebuddy/
 .DS_Store
 Thumbs.db

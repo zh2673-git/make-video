@@ -98,5 +98,25 @@
     "review": "v1 对拍验收"
   },
   "references": "references.md",
-  "antiPatterns": "anti-patterns.md"
+  "antiPatterns": "anti-patterns.md",
+  "visuals": {
+    "dimension": "2d",
+    "motifs": [
+      "silhouette",
+      "venetian-shadow",
+      "hard-key"
+    ],
+    "sceneBias": [
+      "atmosphere",
+      "typography"
+    ],
+    "sceneDeny": [
+      "comic-symbol"
+    ],
+    "texture": [
+      "grain",
+      "vignette"
+    ],
+    "note": "黑白硬光剪影、百叶窗阴影，一半画面藏在暗部"
+  }
 }

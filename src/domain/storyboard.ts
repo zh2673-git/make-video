@@ -1,5 +1,6 @@
 import type { LlmClient } from '../infrastructure/llm-client.js';
 import type {
+  Coverage,
   DirectorNote,
   MaterialDecision,
   Project,
@@ -12,6 +13,7 @@ import { V } from '../core/index.js';
 import { mvError, ERR } from '../core/errors.js';
 import type { ProjectStore } from '../infrastructure/project-store.js';
 import type { StyleRegistry } from './style-registry.js';
+import { applyStyleVisualPool, pickTemplateBySemantics } from './scene-semantics.js';
 
 export interface MaterialIndexItem {
   path: string;
@@ -154,12 +156,15 @@ export async function storyboard(
     materialIndex,
     project.meta.assetPolicy,
   );
+  // 风格决定素材池：sceneDeny 剔除、sceneBias 前置（V-STYLE-008）
+  const templatePool = applyStyleVisualPool(recipe.templates, stylePack.visuals);
   const raw = await llm.generate({
     kind: 'storyboard',
     payload: {
       segments: project.script.segments,
       directorNotes: project.directorNotes,
-      templates: recipe.templates,
+      templates: templatePool,
+      styleVisual: stylePack.visuals,
       shotScaleBias: stylePack.shotScaleBias,
       materialDecisions: decisions,
     },
@@ -172,6 +177,15 @@ export async function storyboard(
     // V-COL-002 色彩脚本：按 cool→neutral→warm 循环分配色温（三幕冷暖节奏）
     const colorTemp = (['cool', 'neutral', 'warm'] as const)[i % 3];
     const visual = { ...shot.visual, params: { ...(shot.visual.params ?? {}) } };
+    // 风格素材池是硬边界：LLM 选了池外形态（含被 sceneDeny 的）就回退到池内语义选择，
+    // 否则「风格决定素材」只是一句口号，画面仍可漂回风格之外
+    if (!templatePool.includes(visual.template ?? '')) {
+      visual.template = pickTemplateBySemantics(
+        shot.narration,
+        templatePool,
+        stylePack.visuals?.sceneBias ?? [],
+      );
+    }
     // canvas 程序化场景：kicker = 该段 beat 的名称（观众可读的章节标签）
     if ((visual.template ?? '').startsWith('canvas:')) {
       const seg = project.script?.segments.find((x) => x.id === (shot.segmentId ?? project.script?.segments[i]?.id));
@@ -190,7 +204,13 @@ export async function storyboard(
       counterpoint: shot.counterpoint ?? 'metaphor',
       gag: shot.counterpoint === 'parody' ? true : false,
       colorTemp,
-      transition: stylePack.transitions[i % stylePack.transitions.length] ?? 'dissolve',
+      // 导演显式给了转场就尊重；留空 = auto，交给剪辑部按切点动机裁决
+      transition: shot.transition ?? stylePack.transitions[i % stylePack.transitions.length] ?? 'dissolve',
+      // docs/04 A5：镜头内覆盖 / match-cut 锚点 / J-L cut 音频偏移（LLM 可给，缺省由合成阶段派生）
+      coverage: normalizeCoverage(shot.coverage),
+      enterAnchor: shot.enterAnchor ?? '',
+      exitAnchor: shot.exitAnchor ?? '',
+      audioShiftMs: typeof shot.audioShiftMs === 'number' ? shot.audioShiftMs : 0,
       state: 'pending' as const,
     } satisfies Shot;
   });
@@ -206,6 +226,22 @@ export async function storyboard(
   }
   await store.save(project);
   return shots;
+}
+
+// LLM 分镜里的覆盖条目是外部输入：只收 0-1 时间比、限 3 条，其余字段补默认
+function normalizeCoverage(raw: Coverage[] | undefined): Coverage[] {
+  return (raw ?? [])
+    .filter((c) => c && Number.isFinite(c.at) && c.at >= 0 && c.at <= 1)
+    .slice(0, 3)
+    .map((c) => ({
+      at: c.at,
+      kind: c.kind === 'reframe' ? 'reframe' : 'punch-in',
+      scale: Number.isFinite(c.scale) ? c.scale : 1.16,
+      xPercent: Number.isFinite(c.xPercent) ? c.xPercent : 0,
+      yPercent: Number.isFinite(c.yPercent) ? c.yPercent : 0,
+      rotation: Number.isFinite(c.rotation) ? c.rotation : 0,
+      motivation: c.motivation || 'emphasis',
+    }));
 }
 
 export function buildConfirmation(project: Project): string {

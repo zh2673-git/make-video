@@ -10,16 +10,46 @@ export const MOTION_WHITELIST = [
   'MV.idle',
   'MV.use',
   'MV.timeline',
+  // 3D 素材语言层（docs/11 §二 visuals.dimension=css3d 时使用）
+  'MV.depth',
+  'MV.tilt3d',
+  'MV.orbit',
+  'MV.card3d',
+  'MV.spin3d',
 ];
+
+/** 3D 痕迹：透视/三轴旋转/景深原语任一出现即视为用了立体素材 */
+const HAS_3D =
+  /perspective\s*:|preserve-3d|rotate3d\(|rotate[XY]\(|translateZ\(|rotation[XY]\s*:|transformPerspective|MV\.(depth|tilt3d|orbit|card3d|spin3d)/i;
+
+export function uses3d(html: string): boolean {
+  return HAS_3D.test(html);
+}
 
 const TIME_ATTRS = ['data-start', 'data-duration', 'data-track-index'];
 
 export function validateSceneFile(
   html: string,
-  opts: { narration: string; title?: string; whitelist?: string[] },
+  opts: {
+    narration: string;
+    title?: string;
+    whitelist?: string[];
+    /** 风格声明的视觉维度（V-STYLE-008 素材语言一致性） */
+    dimension?: '2d' | 'css3d' | 'mixed';
+  },
 ): Issue[] {
   const issues: Issue[] = [];
   const whitelist = opts.whitelist ?? MOTION_WHITELIST;
+
+  // V-STYLE-008 素材语言一致性：声明的维度必须和场景实际用的素材对得上，
+  // 否则风格只是换了配色，素材还是另一派（2D 扁平包混进 3D 场景 / 声明立体却全程平面）
+  const is3d = uses3d(html);
+  if (opts.dimension === '2d' && is3d) {
+    issues.push(warn('V-STYLE-008', '风格声明 dimension=2d，但场景使用了 3D 元素（素材语言漂移）'));
+  }
+  if (opts.dimension === 'css3d' && !is3d) {
+    issues.push(warn('V-STYLE-008', '风格声明 dimension=css3d，但场景无任何 3D 元素（立体语言未落地）'));
+  }
 
   if (!html.includes('data-scene-id')) {
     issues.push(err('V-SCENE-002', '场景缺少根元素 data-scene-id'));
