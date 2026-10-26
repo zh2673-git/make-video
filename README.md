@@ -4,6 +4,13 @@
 这不是"AI 画图拼接"，而是一台会拍电影的编译器：`project.json` 是唯一状态真源，
 七个部门、十四份工件在流水线间交接，LLM 只按表格填空，翻译损耗由此管理。
 
+## 宣传片
+
+[![《工具理性的牢笼》宣传片](docs/media/poster.jpg)](https://zh2673-git.github.io/make-video/showcase.html)
+
+《工具理性的牢笼：文明越强大，人越容易被手段吞噬》——26 镜、2 分 21 秒，全片由 make-video 代码逐镜绘制。
+[▶ 在线观看](https://zh2673-git.github.io/make-video/showcase.html)
+
 ## 特性
 
 - **电影部门制**：编剧 → 导演 → 美术摄影 → 采购 → 声音 → 剪辑 → 工程，七部门 14 工件
