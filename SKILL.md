@@ -45,10 +45,16 @@ description: 自动生成视频 skill：输入主题/讲稿/素材，按电影�
    切点硬跳不插值——同场景换机位是「覆盖」，整场换画布才是「转场」。
    轨迹落 `logs/camera-rig.json`。软转场默认 J-cut：旁白提前 90ms 入（`audioShiftMs`），
    只移音频 clip 落点，不动时间线时长（V-CMP-001 不破）。
-7. **真实素材默认关闭、显式开启**：零配置时零网络零付费，只用代码绘制；用户配置
-   `MAKEVIDEO_PEXELS_API_KEY` 后才可用 `stock` 检索/下载；也可让用户直接把图片/视频
-   放进 `materials/` 用 `add-material` 入库。未配置时主动提示获取免费 key 或提供素材，
-   不得擅自联网下载、不得付费。
+7. **素材三档：默认全画 → 用户点名才找 → 生图必须先问**（P5）。
+   - 用户没说「找素材/真实照片/真实场景」时，`assetPolicy=auto` 全片代码绘制，不联网、不调生图；
+   - 用户点名要真实素材时，先跑 `material-plan` 出逐镜需求单（`need/query/type/mustHave/avoid/reason`），
+     agent 用自己的检索工具按需求单在互联网找，**不绑定固定图库**；抽象概念与数据段一律 `none`，
+     继续代码绘制；
+   - 找回来的候选**先给用户确认**再入库（`add-material --tags --url --license` 带上语义标签与溯源），
+     入库即校验 V-AST-006：宽 <1280 拒绝，宽 <1920 / 比例偏离 16:9 / 视频 <1.5s 只告警；
+   - AI 生图是付费能力，**调用前必须问用户**，非必要不用；用户同意后 `confirm --allow-ai` 写
+     `meta.aiConsent`，未授权时 `compose` 直接以 V-AI-001 拦下。
+   视频素材走帧序列真实播放（抽帧 + GSAP 帧驱动，`MV_MEDIA_FPS` 默认 24），不允许退回首帧静图。
 8. **风格决定素材，不只是配色**（docs/11 `visuals` + V-STYLE-008）：风格包声明
    `dimension`（2d / css3d / mixed）、签名母题、偏好与禁用形态；分镜候选池先按
    `sceneDeny` 剔除、`sceneBias` 前置，LLM 只能在池内选。`css3d` 风格用
@@ -115,7 +121,9 @@ make-video init <主题> [--aspect 16:9|9:16] [--duration-tier 0-5|5-10|10+]
                     [--genre <id>] [--style <id>] [--script <file>]
                     [--materials <dir>] [--asset-policy auto|ask|code-first|real-first]
 make-video doctor                              # 环境体检（动手前先跑）
-make-video add-material <文件|目录>             # 用户素材入库（录音/照片/视频同权）
+make-video add-material <文件|目录> [--shot sXX] [--tags a,b] [--url <来源页>]
+                    [--license <许可>] [--credit <署名>] [--strict]   # 入库即校验 V-AST-006
+make-video material-plan [--project <id>] [--style <id>]   # 逐镜素材需求单（给 agent 检索）
 make-video storyboard                          # 导演批注+分镜+确认表（一次确认）
 make-video draw [--shot sXX]                   # 场景代码生成（模板兜底）
 make-video scene --shot sXX --from <html>      # agent/人工原创场景接入（默认工作方式）
@@ -123,6 +131,9 @@ make-video import --shot sXX --from <源>       # 素材导入（外部视频抽
 make-video stock <关键词> [--project <id>] [--type image|video] [--count N]
                     [--download] [--shot sXX]     # 真实素材检索/下载（需 key，默认关闭）
 make-video voice [--shot sXX] [--from <文件>]  # 旁白（TTS 或用户录音，实测时长=时间真源）
+                    # MV_TTS=qwen3|edge-py|edge|silent|sovits；qwen3 为定档克隆音色
+                    # （配置固化在 scripts/run-voice.mjs，参考音频存个人文档不入库；
+                    #   sovits 走 GPT-SoVITS 零样本，MAKEVIDEO_SOVITS_URL/REF_AUDIO/PROMPT_TEXT 三件套）
 make-video compose                             # 质量闸门+时间线+合成项目
 make-video render [-o out.mp4]                 # 渲染（doctor+锁+输出校验）
 make-video run                                 # 全自动（确认点暂停）
@@ -130,7 +141,7 @@ make-video status                              # 阶段/镜头/素材缺口/风�
 make-video retry [--shot sXX] [--stage XX]     # 局部重跑
 make-video clean                               # 回收中间产物（保留成片与 IR）
 make-video style list | show <id> | absorb --from <源> | promote <id>
-make-video confirm                             # 确认分镜表，放行采购
+make-video confirm [--allow-ai]                # 确认分镜表，放行采购；--allow-ai 授权云端生图
 # recipe-save（好项目沉淀为新配方）为 P2 规划，尚未实现
 ```
 
@@ -156,7 +167,13 @@ make-video confirm                             # 确认分镜表，放行采购
    任一条不满足，先改分镜/动机，不要靠换转场词糊过去。
 10. **素材自检**：合成前确认每镜模板在风格池内（`visuals.sceneDeny` 未命中），
     `css3d` 风格的场景真的调用了 3D 原语、`2d` 风格没混进 3D；V-STYLE-008 的
-   warn 要么修画面，要么改风格声明，不允许「配色像、素材不像」的混搭交差。
+    warn 要么修画面，要么改风格声明，不允许「配色像、素材不像」的混搭交差。
+    真实素材镜另查三件：入库时 V-AST-006 无 error、视频帧序列已落
+    `remotion/media/<shotId>/frames/`、成片抽帧画面在变（不是首帧定格）；
+    素材溯源（sourceUrl/license/credit）随索引保存，报告里不得留空。
+11. **克隆换声验收**：换参考音频或换克隆引擎后，必须用本地 ASR（FunASR）对合成旁白
+    逐句转写，与讲稿逐字比对**全对才采纳**（语速档位同样过这道闸，防变速压字）；
+    不过闸就换参考音频或换引擎，禁止带错音出片。
 
 ## 方案文档树（深入设计与理论锚点）
 

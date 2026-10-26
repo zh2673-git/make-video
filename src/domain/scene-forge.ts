@@ -1,4 +1,4 @@
-﻿import path from 'node:path';
+import path from 'node:path';
 import type { Project, Shot, StylePack } from '../core/schema.js';
 import { V } from '../core/index.js';
 import { mvError, ERR } from '../core/errors.js';
@@ -191,7 +191,7 @@ async function writeArtifacts(
   store: ProjectStore,
   project: Project,
   shot: Shot,
-  origin: 'llm' | 'forge',
+  origin: 'llm' | 'forge' | 'agent',
 ): Promise<void> {
   const dir = store.projectDir(project.meta.id);
   const artDir = path.join(dir, 'logs', 'artifacts');

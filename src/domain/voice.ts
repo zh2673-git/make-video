@@ -74,6 +74,8 @@ export async function synthesizeAll(
     if (shot.state === 'sourced' || shot.state === 'failed') shot.state = 'voiced';
     out.push(ref);
   }
+  // 旁白时长变了，旧时间线必然失配（V-CMP-001），作废等重排
+  if (out.length && project.timeline) project.timeline = undefined;
   await store.save(project);
   return out;
 }

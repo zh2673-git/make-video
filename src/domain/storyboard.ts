@@ -20,6 +20,13 @@ export interface MaterialIndexItem {
   type: 'image' | 'video' | 'audio' | 'other';
   durationMs?: number;
   tags: string[];
+  /** 素材契约（P5）：尺寸用于入库校验与裁切决策 */
+  width?: number;
+  height?: number;
+  /** 来源溯源：检索地址/作者/许可证，写进 shot.asset.meta 便于回溯 */
+  sourceUrl?: string;
+  credit?: string;
+  license?: string;
 }
 
 export interface MaterialIndex {

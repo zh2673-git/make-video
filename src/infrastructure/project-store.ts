@@ -66,6 +66,7 @@ export class ProjectStore {
         fps: 30,
         genre: opts.genre ?? 'science-explainer',
         assetPolicy: opts.assetPolicy ?? 'auto',
+        aiConsent: false,
       },
       stage: 'init',
       directorNotes: [],

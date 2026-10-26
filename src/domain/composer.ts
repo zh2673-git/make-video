@@ -2,6 +2,7 @@ import path from 'node:path';
 import type {
   ContinuityReport,
   Project,
+  StyleMedia,
   StylePack,
   SubtitlePolicy,
   Timeline,
@@ -23,7 +24,7 @@ import {
   motivationTransition,
   type TransitionPlan,
 } from './transitions.js';
-import { extractFrame } from '../infrastructure/ffmpeg-utils.js';
+import { extractFrameSequence } from '../infrastructure/ffmpeg-utils.js';
 import {
   buildRigScript,
   deriveCoverage,
@@ -37,6 +38,15 @@ export function validateReadiness(project: Project): V.Issue[] {
   const issues: V.Issue[] = [];
   if (!project.style) issues.push(V.err('V-STYLE-001', '缺少风格决策'));
   for (const shot of project.shots) {
+    // V-AI-001：云端生成是付费能力，必须由用户显式授权，禁止静默消耗额度
+    if (shot.visual.kind === 'cloud' && !project.meta.aiConsent) {
+      issues.push(
+        V.err(
+          'V-AI-001',
+          `镜头 ${shot.id} 走云端生成但项目未获 AI 生图授权：先征得用户同意并执行 confirm --allow-ai`,
+        ),
+      );
+    }
     if (!shot.asset) {
       issues.push(V.err('V-AST-005', `镜头 ${shot.id} 缺少素材资产`));
     } else if (!exists(shot.asset.path)) {
@@ -432,12 +442,23 @@ async function emitHyperframesProject(
       shot.visual.kind === 'user-material' || shot.visual.kind === 'imported' ? shot.asset : undefined;
     if (mediaAsset && exists(mediaAsset.path)) {
       sideByShot.set(shot.id, 'bottom');
-      const rel = await stageMedia(hfDir, shot.id, mediaAsset.path);
+      const mediaStyle = pack.visuals.media;
+      const staged = await stageMedia(hfDir, shot.id, mediaAsset.path, {
+        durationMs: durMs,
+        style: mediaStyle,
+      });
+      // 运镜策略由风格包裁决：static 真静止 / ken-burns 必须动起来 / auto 听导演
+      const mediaCamera =
+        mediaStyle.motion === 'static'
+          ? 'static'
+          : mediaStyle.motion === 'ken-burns' && shot.camera === 'static'
+            ? 'push-in'
+            : shot.camera;
       const rig = planCameraRig({
         shotId: shot.id,
         durationMs: durMs,
         zoom: shot.zoom,
-        camera: shot.camera,
+        camera: mediaCamera,
         focus: { x: 50, y: 50 },
         coverage: t?.coverage ?? [],
         options: parseCameraOptions(shot.visual.params),
@@ -445,7 +466,14 @@ async function emitHyperframesProject(
       rigAudit.push(rigSummary(rig));
       await atomicWriteText(
         path.join(compDir, `Scene_${shot.id}.html`),
-        buildMediaComposition(shot.id, rel, size, durMs / 1000, buildRigScript(rig)),
+        buildMediaComposition(
+          shot.id,
+          staged,
+          size,
+          durMs / 1000,
+          buildRigScript(rig),
+          mediaStyle,
+        ),
       );
       continue;
     }
@@ -612,29 +640,112 @@ ${transitionsScript}
   await atomicWriteText(path.join(hfDir, 'index.html'), indexHtml);
 }
 
-// 真实素材进渲染工程：图片直接拷贝；视频取首帧（截图逐帧渲染下内嵌 video 的时钟无法与合成时间轴严格对齐）
-async function stageMedia(hfDir: string, shotId: string, assetPath: string): Promise<string> {
+// 真实素材进渲染工程：图片直接拷贝；视频转帧序列（逐帧 seek 下内嵌 video 的时钟不可控）
+interface StagedMedia {
+  src: string;
+  frames?: { count: number; fps: number };
+}
+
+async function stageMedia(
+  hfDir: string,
+  shotId: string,
+  assetPath: string,
+  opts: { durationMs: number; style: StyleMedia },
+): Promise<StagedMedia> {
   const outDir = path.join(hfDir, 'media', shotId);
   await ensureDir(outDir);
   const ext = path.extname(assetPath).toLowerCase();
   if (['.mp4', '.mov', '.webm', '.mkv'].includes(ext)) {
-    const frame = path.join(outDir, 'frame.png');
-    await extractFrame(assetPath, 0, frame);
-    return `../media/${shotId}/frame.png`;
+    // 帧率可调：默认 24fps 足够顺滑，帧数 = 时长×帧率（循环补足），磁盘可控
+    const raw = Number(process.env['MV_MEDIA_FPS'] ?? 24);
+    const fps = Number.isFinite(raw) ? Math.min(30, Math.max(8, Math.round(raw))) : 24;
+    const framesDir = path.join(outDir, 'frames');
+    const fs = await import('node:fs/promises');
+    await fs.rm(framesDir, { recursive: true, force: true });
+    const { count } = await extractFrameSequence(
+      assetPath,
+      framesDir,
+      fps,
+      1920,
+      opts.durationMs / 1000 + 0.35,
+    );
+    return { src: `../media/${shotId}/frames/f%05d.jpg`, frames: { count, fps } };
   }
   const base = path.basename(assetPath);
   await copyFile(assetPath, path.join(outDir, base));
-  return `../media/${shotId}/${encodeURIComponent(base)}`;
+  return { src: `../media/${shotId}/${encodeURIComponent(base)}` };
 }
 
-// 真实素材镜的合成：满幅画面 + 电影化调色（暗角/颗粒/轻推镜），与代码场景共用同一套转场与字幕
-function buildMediaComposition(
+// 真实素材镜的合成：满幅画面 + 风格包调色（P5-C），与代码场景共用同一套转场与字幕
+export function buildMediaComposition(
   shotId: string,
-  src: string,
+  media: StagedMedia,
   size: { w: number; h: number },
   durationS: number,
   rigScript = '',
+  style: StyleMedia = {
+    grade: 'warm',
+    grain: 0.13,
+    vignette: 0.62,
+    letterbox: false,
+    motion: 'auto',
+    fit: 'cover',
+  },
 ): string {
+  const filmFilter =
+    style.grade === 'bleach'
+      ? 'saturate(0.55) contrast(1.18) brightness(1.03)'
+      : style.grade === 'cool'
+        ? 'saturate(0.86) contrast(1.06) brightness(0.94)'
+        : style.grade === 'neutral'
+          ? 'saturate(1) contrast(1.04) brightness(0.99)'
+          : 'saturate(0.88) contrast(1.07) brightness(0.96)';
+  const gradeLayer =
+    style.grade === 'none'
+      ? ''
+      : `<div class="grade grade-${style.grade}"></div>`;
+  const letterbox = style.letterbox
+    ? `<div class="bar bar-top"></div><div class="bar bar-bottom"></div>`
+    : '';
+  // 首帧先落第一张，避免 seek 到第 0 帧前出现空图
+  const firstSrc = media.frames ? media.src.replace('%05d', '00001') : media.src;
+  const frameDriver = media.frames
+    ? `<script>
+(function () {
+  var ID = 'scene-${shotId}';
+  var PATTERN = ${JSON.stringify(media.src)};
+  var COUNT = ${media.frames.count};
+  var DUR = ${durationS.toFixed(3)};
+  function pad(n) { return ('00000' + n).slice(-5); }
+  function boot() {
+    var tl = window.__timelines && window.__timelines[ID];
+    var img = document.querySelector('[data-mv-film]');
+    if (!tl || !img) return;
+    var st = { i: 0 };
+    var cur = 0;
+    tl.to(st, {
+      i: COUNT - 1,
+      duration: DUR,
+      ease: 'none',
+      onUpdate: function () {
+        var idx = Math.max(0, Math.min(COUNT - 1, Math.round(st.i)));
+        if (idx !== cur) {
+          cur = idx;
+          img.src = PATTERN.replace('%05d', pad(idx + 1));
+        }
+      }
+    }, 0);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else setTimeout(boot, 0);
+})();
+</script>`
+    : '';
+  const kenBurns =
+    style.motion === 'static'
+      ? ''
+      : `window.__timelines['scene-${shotId}'].fromTo('.frame', { scale: 1.09 }, { scale: 1.0, duration: ${durationS.toFixed(3)}, ease: 'none' }, 0);`;
+
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -643,29 +754,38 @@ function buildMediaComposition(
   html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #050505; }
   .stage { position: relative; width: 100%; height: 100%; overflow: hidden; background: #050505; }
   .frame { position: absolute; inset: 0; overflow: hidden; transform-origin: 50% 50%; }
-  .film { display: block; width: 100%; height: 100%; object-fit: cover; filter: saturate(0.88) contrast(1.07) brightness(0.96); }
-  .grade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(255,236,190,0.06), transparent 42%, rgba(6,8,14,0.32)); mix-blend-mode: soft-light; }
-  .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, transparent 44%, rgba(0,0,0,0.62) 100%); }
-  .grain { position: absolute; inset: 0; opacity: 0.13; mix-blend-mode: overlay; background-image: repeating-radial-gradient(circle at 30% 40%, rgba(255,255,255,0.10) 0 0.5px, transparent 0.6px 2.2px), repeating-radial-gradient(circle at 70% 60%, rgba(255,255,255,0.08) 0 0.4px, transparent 0.5px 1.8px); background-size: 3px 3px, 5px 5px; }
+  .film { display: block; width: 100%; height: 100%; object-fit: ${style.fit}; filter: ${filmFilter}; }
+  .grade { position: absolute; inset: 0; mix-blend-mode: soft-light; }
+  .grade-warm { background: linear-gradient(180deg, rgba(255,236,190,0.06), transparent 42%, rgba(6,8,14,0.32)); }
+  .grade-cool { background: linear-gradient(180deg, rgba(176,206,255,0.07), transparent 40%, rgba(3,7,16,0.38)); }
+  .grade-neutral { background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent 45%, rgba(0,0,0,0.26)); }
+  .grade-bleach { background: linear-gradient(180deg, rgba(255,255,255,0.10), transparent 55%, rgba(0,0,0,0.20)); }
+  .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, transparent 44%, rgba(0,0,0,${style.vignette}) 100%); }
+  .grain { position: absolute; inset: 0; opacity: ${style.grain}; mix-blend-mode: overlay; background-image: repeating-radial-gradient(circle at 30% 40%, rgba(255,255,255,0.10) 0 0.5px, transparent 0.6px 2.2px), repeating-radial-gradient(circle at 70% 60%, rgba(255,255,255,0.08) 0 0.4px, transparent 0.5px 1.8px); background-size: 3px 3px, 5px 5px; }
+  .bar { position: absolute; left: 0; right: 0; height: 5.5%; background: #000; z-index: 3; }
+  .bar-top { top: 0; }
+  .bar-bottom { bottom: 0; }
 </style>
 <script src="../motion/gsap.min.js"></script>
 </head>
 <body>
 <div data-composition-id="scene-${shotId}" data-width="${size.w}" data-height="${size.h}" data-duration="${durationS.toFixed(3)}" style="width:100%;height:100%">
   <div class="stage">
-    <div class="frame"><img class="film" src="${src}" alt=""></div>
-    <div class="grade"></div>
+    <div class="frame"><img class="film" data-mv-film src="${firstSrc}" alt=""></div>
+    ${gradeLayer}
     <div class="vignette"></div>
     <div class="grain"></div>
+    ${letterbox}
   </div>
 </div>
 <script>
 window.__timelines = window.__timelines || {};
 window.__timelines['scene-${shotId}'] = window.gsap ? gsap.timeline({ paused: true }) : null;
 if (window.__timelines['scene-${shotId}']) {
-  window.__timelines['scene-${shotId}'].fromTo('.frame', { scale: 1.09 }, { scale: 1.0, duration: ${durationS.toFixed(3)}, ease: 'none' }, 0);
+  ${kenBurns}
 }
 </script>
+${frameDriver}
 ${rigScript}
 </body>
 </html>
@@ -678,9 +798,9 @@ export function pickCaptionSide(sceneHtml: string): 'top' | 'bottom' {
   const block = sceneHtml.match(/\.subject\s*\{([^}]*)\}/)?.[1];
   if (block) {
     const top = block.match(/(?:^|[;\s])top:\s*([\d.]+)%/);
-    if (top) return parseFloat(top[1]) > 55 ? 'top' : 'bottom';
+    if (top) return parseFloat(top[1] ?? '0') > 55 ? 'top' : 'bottom';
     const bottom = block.match(/(?:^|[;\s])bottom:\s*([\d.]+)%/);
-    if (bottom) return parseFloat(bottom[1]) < 30 ? 'top' : 'bottom';
+    if (bottom) return parseFloat(bottom[1] ?? '0') < 30 ? 'top' : 'bottom';
   }
   return 'bottom';
 }

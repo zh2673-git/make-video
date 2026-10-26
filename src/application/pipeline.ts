@@ -49,6 +49,8 @@ export async function useRecording(
   if (!shot) throw mvError(ERR.PROJECT_NOT_FOUND, `镜头不存在: ${shotId}`);
   shot.voice = await adoptRecording(store, project, shotId, file);
   if (shot.state === 'pending' || shot.state === 'failed') shot.state = 'voiced';
+  // 录音换了，旧时间线失配，作废等重排
+  if (project.timeline) project.timeline = undefined;
   await store.save(project);
 }
 
@@ -59,7 +61,7 @@ export async function adoptSceneFile(
   shotId: string,
   file: string,
   pack?: import('../core/schema.js').StylePack,
-): Promise<{ adopted: boolean; issues: import('../core/index.js').Issue[] }> {
+): Promise<{ adopted: boolean; issues: import('../core/validators/index.js').Issue[] }> {
   const { adoptScene } = await import('../domain/scene-forge.js');
   const r = await adoptScene(store, project, shotId, file, pack);
   if (r.adopted) {

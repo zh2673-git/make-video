@@ -42,7 +42,7 @@ function fail(e: unknown): never {
 
 function ttsProvider(): TtsProvider {
   const v = process.env['MV_TTS'] ?? 'auto';
-  if (v === 'edge' || v === 'edge-py' || v === 'silent' || v === 'auto') return v;
+  if (v === 'edge' || v === 'edge-py' || v === 'silent' || v === 'sovits' || v === 'auto') return v;
   return 'auto';
 }
 
@@ -154,16 +154,68 @@ program
 
 program
   .command('add-material <files...>')
-  .description('用户素材入库（复制进 materials/，自动索引）')
+  .description('用户素材入库（复制进 materials/，自动索引；可选标签/溯源/直接绑定镜头）')
   .option('--project <id>', '项目 id')
-  .action(async (files: string[], opts: Record<string, string>) => {
+  .option('--shot <id>', '入库后直接绑定为该镜的真实素材')
+  .option('--tags <list>', '逗号分隔的语义标签（按旁白匹配时命中率更高）')
+  .option('--url <url>', '素材来源页（写入溯源，成片报告可见）')
+  .option('--license <text>', '素材许可证')
+  .option('--credit <text>', '作者署名')
+  .option('--strict', '尺寸不达标即失败（默认只告警）')
+  .action(async (files: string[], opts: Record<string, string | boolean>) => {
     try {
       const { store } = makeEngine();
-      const id = await store.resolveProjectId(opts['project']);
+      const id = await store.resolveProjectId(opts['project'] as string | undefined);
       const project = await store.load(id);
-      const { indexMaterials } = await import('../domain/asset-sourcing.js');
-      const index = await indexMaterials(store, project, files);
-      out({ items: index.items.length, index: index.items.map((i) => ({ path: i.path, type: i.type })) });
+      const { indexMaterials, checkMaterial, bindMaterial } = await import(
+        '../domain/asset-sourcing.js'
+      );
+      const tags = String(opts['tags'] ?? '')
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const common = {
+        ...(tags.length ? { tags } : {}),
+        ...(opts['url'] ? { sourceUrl: String(opts['url']) } : {}),
+        ...(opts['license'] ? { license: String(opts['license']) } : {}),
+        ...(opts['credit'] ? { credit: String(opts['credit']) } : {}),
+      };
+      const index = await indexMaterials(
+        store,
+        project,
+        files.map((file) => ({ file, ...common })),
+      );
+      const added = index.items.filter((i) =>
+        files.some((f) => path.basename(f) === path.basename(i.path)),
+      );
+      const issues = added.flatMap((i) => checkMaterial(i));
+      if (opts['strict'] && V.hasError(issues)) {
+        throw mvError('ERR_VALIDATION', `素材不合格:\n${V.formatIssues(issues)}`);
+      }
+      let bound: { shot: string; path: string } | undefined;
+      const shotId = opts['shot'] as string | undefined;
+      if (shotId) {
+        const item = added[0];
+        if (!item) throw mvError('ERR_ASSET_MISSING', '没有可绑定的入库结果');
+        bindMaterial(project, shotId, item, '用户手动指定素材');
+        await store.save(project);
+        bound = { shot: shotId, path: item.path };
+      }
+      out({
+        items: added.length,
+        index: added.map((i) => ({
+          path: i.path,
+          type: i.type,
+          ...(i.width ? { width: i.width } : {}),
+          ...(i.height ? { height: i.height } : {}),
+          ...(i.durationMs ? { durationMs: i.durationMs } : {}),
+          tags: i.tags,
+          ...(i.sourceUrl ? { sourceUrl: i.sourceUrl } : {}),
+          ...(i.license ? { license: i.license } : {}),
+        })),
+        issues,
+        ...(bound ? { bound } : {}),
+      });
     } catch (e) {
       fail(e);
     }
@@ -258,6 +310,43 @@ program
         style: p.style?.id,
         events: events.map((e) => e.type),
         confirmation: buildConfirmation(p),
+      });
+    } catch (e) {
+      fail(e);
+    }
+  });
+
+program
+  .command('material-plan')
+  .description('素材需求单（逐镜判断哪些镜需要真实素材，写 gen/material-plan.json）')
+  .option('--project <id>', '项目 id')
+  .option('--style <id>', '指定风格包 id（缺省用项目已选风格）')
+  .action(async (opts: Record<string, string>) => {
+    try {
+      const { store, registry } = makeEngine();
+      await loadRegistry(registry);
+      const id = await store.resolveProjectId(opts['project']);
+      const project = await store.load(id);
+      if (!project.shots.length) throw mvError('ERR_VALIDATION', '缺少分镜，先跑 storyboard');
+      const packId = opts['style'] ?? project.style?.id;
+      if (!packId) throw mvError('ERR_STYLE_UNKNOWN', '项目还没有风格决策，先跑 storyboard 或指定 --style');
+      const pack =
+        !opts['style'] && project.style ? registry.resolveStyle(project.style) : registry.getStyle(packId);
+      const { planMaterials } = await import('../domain/material-plan.js');
+      const briefs = await planMaterials(project, pack, createLlmClientFromEnv());
+      const { atomicWriteJson } = await import('../infrastructure/fs-utils.js');
+      const file = path.join(store.projectDir(id), 'gen', 'material-plan.json');
+      await atomicWriteJson(file, {
+        generatedAt: new Date().toISOString(),
+        topic: project.meta.topic,
+        style: pack.id,
+        briefs,
+      });
+      out({
+        file,
+        total: briefs.length,
+        wanted: briefs.filter((b) => b.need !== 'none').length,
+        briefs,
       });
     } catch (e) {
       fail(e);
@@ -606,14 +695,16 @@ program
   .command('confirm')
   .description('确认分镜表（写 confirmed=true，放行采购）')
   .option('--project <id>', '项目 id')
-  .action(async (opts: Record<string, string>) => {
+  .option('--allow-ai', '授权本项目使用云端 AI 生图（用户显式同意后再加，V-AI-001 闸门）')
+  .action(async (opts: Record<string, string | boolean>) => {
     try {
       const { store } = makeEngine();
-      const id = await store.resolveProjectId(opts['project']);
+      const id = await store.resolveProjectId(opts['project'] as string | undefined);
       const project = await store.load(id);
       project.confirmed = true;
+      if (opts['allow-ai']) project.meta.aiConsent = true;
       await store.save(project);
-      out({ confirmed: true, stage: project.stage });
+      out({ confirmed: true, stage: project.stage, aiConsent: project.meta.aiConsent });
     } catch (e) {
       fail(e);
     }

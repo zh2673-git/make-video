@@ -2,7 +2,13 @@ import { mvError, ERR } from '../core/errors.js';
 import { LLM_RETRY_MAX } from '../core/constants.js';
 import { pickCanvasProgram, bestTemplate, pickTemplateBySemantics } from '../domain/scene-semantics.js';
 
-export type LlmTaskKind = 'script' | 'director-notes' | 'storyboard' | 'scene' | 'style-analyze';
+export type LlmTaskKind =
+  | 'script'
+  | 'director-notes'
+  | 'storyboard'
+  | 'scene'
+  | 'style-analyze'
+  | 'material-plan';
 
 export interface LlmTask {
   kind: LlmTaskKind;
@@ -59,7 +65,9 @@ function buildPrompt(task: LlmTask): Array<{ role: string; content: string }> {
       ? SCENE_SYSTEM_PROMPT
       : task.kind === 'storyboard'
         ? STORYBOARD_SYSTEM_PROMPT
-        : `你是视频编译器的${task.kind}部门引擎。只输出合法 JSON，遵守给定 schema。`;
+        : task.kind === 'material-plan'
+          ? MATERIAL_PLAN_SYSTEM_PROMPT
+          : `你是视频编译器的${task.kind}部门引擎。只输出合法 JSON，遵守给定 schema。`;
   return [
     { role: 'system', content: sys },
     { role: 'user', content: JSON.stringify(task.payload) },
@@ -95,6 +103,24 @@ const STORYBOARD_SYSTEM_PROMPT = `你是视频编译器的导演部（导演+分
 节奏纪律：景别要有序列（ELS→LS→MS→CU→ECU 递进或跳切），相邻镜不要同景别同机位同转场；每 2-3 秒给一次视觉变化（可以是主体表演/图形动效，不必都靠机位）。
 
 素材纪律：templates 是**风格筛过的候选池**（payload.styleVisual 说明这一派的素材语言：维度/母题/偏好/禁用），visual.template 只能从池中选；池里有 3D 形态（iso-stage/depth-layers）时，需要纵深/结构的镜头优先用它们，别全片退回平面排版。visual.params 可带 depth（0-1 纵深强度）等风格参数。`;
+
+/**
+ * 素材需求单系统提示词（P5-B）：只做「这一镜需要什么样的真实素材」，不负责找、不负责画。
+ * 检索由 agent 在引擎外完成，引擎只收需求单 + 入库校验 + 绑定。
+ */
+const MATERIAL_PLAN_SYSTEM_PROMPT = `你是视频编译器的素材统筹。根据逐镜旁白，判断哪些镜头需要**真实素材**（照片/视频）而不是代码绘制，并为需要的镜头写检索需求单。只输出合法 JSON：{"briefs":[...]}。
+
+判断纪律（顺序执行）：
+1. 先问「这一镜能不能靠代码画准」。抽象概念、数据、流程、对比、纯排版、chart 类 → need="none"，绝不要真实素材。
+2. 只有旁白在指认**具体的现实对象**（真实人物/名址/特定器物/真实场景/历史影像）时，才 need≠none。泛指概念（"人们""城市""生活"）一律 none。
+3. need 取值：person（真实人物肖像/半身）、place（真实地点/建筑/街景）、object（特定实物）、background（真实环境氛围底图）、none。
+4. type：需要「动作/时间流逝/过程」→ video；静态对象/肖像/地点 → image。拿不准就 image（成本低、可控）。
+5. query：**给检索工具用的关键词**，中英各写一份，用 " | " 分隔，例如 "苏州平江路 清晨 | Suzhou Pingjiang Road morning"。禁止写句子，禁止写镜头语言（不要 "特写""慢推"）。
+6. mustHave：必须出现在画面里的可见要素（最多 4 个，名词）。avoid：不能出现的要素（水印、人物正脸、文字招牌等，按内容判断）。
+7. reason：一句话说明「为什么这一镜非真实素材不可」，写不出具体理由就改 none。
+
+输出 schema（每个镜头一条，顺序同输入）：
+{"briefs":[{"shotId":"s01","need":"place","type":"image","query":"...","mustHave":["..."],"avoid":["..."],"reason":"..."}]}`;
 
 export interface LlmRetryClient extends LlmClient {
   readonly inner: LlmClient;
@@ -148,6 +174,8 @@ export class TemplateLlmClient implements LlmClient {
         return { html: '', note: 'template-mode: 由 scene-forge 本地模板生成' };
       case 'style-analyze':
         return templateStyleAnalyze(task.payload);
+      case 'material-plan':
+        return templateMaterialPlan(task.payload);
       default:
         throw mvError(ERR.LLM_SCHEMA, `template 引擎不支持的任务: ${task.kind}`);
     }
@@ -318,4 +346,57 @@ function templateStyleAnalyze(payload: Record<string, unknown>): unknown {
     },
     suggestedBase: d.includes('暗') || d.includes('黑') ? 'noir-contrast' : 'keynote-minimal',
   };
+}
+
+interface MaterialPlanPayload {
+  topic?: string;
+  genre?: string;
+  segments?: Array<{
+    shotId: string;
+    segmentId: string;
+    narration: string;
+    emphasis?: string[];
+    zoom?: string;
+  }>;
+}
+
+const CONCRETE_PERSON = /(先生|老师|校长|医生|老人|孩子|母亲|父亲|工程师|运动员|作家|画家|歌手|演员|记者|工人|农民)/;
+const CONCRETE_PLACE = /(街|路|桥|河|湖|山|城|镇|村|楼|塔|寺|园|站|港|遗址|故居|博物馆|学校|医院|老宅)/;
+const CONCRETE_OBJECT = /(书|信|钟|笔|机器|相机|茶|碗|伞|车|船|琴|照片|手稿|标本|旗帜|印章)/;
+const MOTION_CUE = /(走过|穿过|奔跑|流动|生长|翻页|转动|下雪|下雨|日落|清晨|夜晚|排队|挥手)/;
+
+/**
+ * 离线素材需求单（template 引擎）：宁可少要，也不要乱要。
+ * 没有明确的现实指称物一律 none——默认走代码绘制，符合「用户没说找素材就全画」的纪律。
+ */
+function templateMaterialPlan(payload: Record<string, unknown>): unknown {
+  const p = payload as unknown as MaterialPlanPayload;
+  const briefs = (p.segments ?? []).map((s) => {
+    const t = s.narration ?? '';
+    let need: 'person' | 'place' | 'object' | 'background' | 'none' = 'none';
+    if (CONCRETE_PERSON.test(t)) need = 'person';
+    else if (CONCRETE_PLACE.test(t)) need = 'place';
+    else if (CONCRETE_OBJECT.test(t)) need = 'object';
+    const emphasis = s.emphasis ?? [];
+    const mustHave = need === 'none' ? [] : [...new Set([...emphasis.filter((w) => w.length >= 2), ...t.match(/[\u4e00-\u9fa5]{2,6}/g)?.slice(0, 2) ?? []])].slice(0, 4);
+    const query =
+      need === 'none'
+        ? ''
+        : [...new Set([...emphasis, ...mustHave])].slice(0, 3).join(' ') || t.slice(0, 12);
+    return {
+      shotId: s.shotId,
+      segmentId: s.segmentId,
+      narration: t,
+      need,
+      query,
+      type: need !== 'none' && MOTION_CUE.test(t) ? 'video' : 'image',
+      mustHave,
+      avoid: ['logo', 'watermark', 'text'],
+      reason:
+        need === 'none'
+          ? '抽象/论述段，代码绘制更准'
+          : `旁白指认了具体${need === 'person' ? '人物' : need === 'place' ? '地点' : '实物'}，需要真实影像`,
+    };
+  });
+  return { briefs };
 }

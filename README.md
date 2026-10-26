@@ -40,9 +40,14 @@
   轨迹落 `logs/camera-rig.json`
 - **J-cut / L-cut**：软转场默认让旁白提前 90ms 入（声音先到、画面后到），只移音频
   clip 落点，不动时间线时长——音画同步不变量照旧成立
-- **真实素材可选接入**：默认零配置、零网络、零付费，只用代码绘制；配置
-  `MAKEVIDEO_PEXELS_API_KEY` 后可用 `stock` 检索/下载并绑定到指定镜头
-  （图片满幅电影化调色、视频取静帧），未配置时给中文指引改用 `add-material`
+- **真实素材可选接入（三档纪律）**：默认零配置、零网络、零付费，全片代码绘制；用户点名要
+  真实素材时，`material-plan` 先出**逐镜需求单**（找什么/图片还是视频/必须含/必须避/为什么），
+  agent 用自己的检索工具在互联网找，不绑定固定图库；候选**先给用户确认**再
+  `add-material --tags --url --license` 入库，入库即校验（宽 <1280 拒绝，宽 <1920、
+  比例偏离 16:9、视频过短只告警）。视频素材走**帧序列真实播放**（ffmpeg 抽帧 + GSAP
+  帧驱动，帧索引是合成时间的纯函数），不再退回首帧静图；图片/视频统一套风格包
+  `visuals.media` 的调色、颗粒、暗角、遮幅与运镜。AI 生图是付费能力，**调用前必须问用户**，
+  授权后 `confirm --allow-ai` 才放行（`V-AI-001` 闸门）
 - **断点续跑**：全部状态落 IR，单镜重试、阶段回拨、局部重生成
 
 ## 快速开始
@@ -54,13 +59,18 @@ npm run dev -- init "你的主题" --genre science-explainer --style comedy-pop
 npm run dev -- run                              # 全自动（确认点暂停）
 ```
 
-真实素材是可选路径（默认关闭）：
+真实素材是可选路径（默认全代码绘制，用户点名才会走）：
 
 ```bash
-set MAKEVIDEO_PEXELS_API_KEY=<免费 key>          # Pexels 免费注册，免费用量
-npm run dev -- stock "老式放映机" --project <id> --shot s05
+npm run dev -- material-plan --project <id>      # 逐镜需求单 → gen/material-plan.json
+# agent 按需求单自行检索 → 候选先给用户确认 → 入库（带语义标签与溯源）
+npm run dev -- add-material D:\pics\pingjiang.jpg --project <id> --shot s05 \
+              --tags 平江路,老街 --url <来源页> --license CC0
 npm run dev -- compose --project <id>            # 该镜改走满幅真实素材合成
 ```
+
+视频素材同样入库，compose 时按镜头时长抽帧补足（`MV_MEDIA_FPS` 默认 24，可 8-30）。
+AI 生图默认禁用：确需云端生成时先征得用户同意，再 `confirm --allow-ai` 授权。
 
 ## LLM 拿到这个 skill 后怎么跑（端到端流程）
 
@@ -72,7 +82,8 @@ npm run dev -- compose --project <id>            # 该镜改走满幅真实素�
 4. **出分镜**：`storyboard` 让 LLM **按表格填空**（景别/运镜/切点动机/转场/覆盖/
    对位/色温），产物过 E2 与 V-STE 校验；`confirm` 是人工确认点——确认后才往下走。
 5. **全自动或分段跑**：`run` 把「分镜 → 素材 → 场景 → 配音 → 合成 → 渲染」串起来，
-   每个确认点暂停，任何一步失败都能断点续跑。
+   每个确认点暂停，任何一步失败都能断点续跑。若用户点名要真实素材，先
+   `material-plan` → agent 检索 → 用户确认候选 → `add-material` 绑镜，再往下跑。
 6. **逐镜作画**：agent 写 `scenes/Scene_sNN.html`（HTML + `MV.*` 动效原语），
    `scene --shot sNN --from <file>` 过校验后落盘；模板轮转只是没有 agent 时的兜底。
 7. **配音**：`voice` 走 TTS 或采用真人录音，ffprobe 实测时长写回 `shot.voice`——
@@ -95,10 +106,24 @@ npm run dev -- compose --project <id>            # 该镜改走满幅真实素�
 2. **用你自己的真人录音**：逐镜录音后
    `voice --project <id> --shot s05 --from D:\vo\s05.wav`；采用后 `source=recording`，
    时长以实测为准，重跑 `compose` + `render` 即可。音色完全是你自己的，代价是每镜一条录音。
-3. **克隆音色（Zero-shot）**：内置 provider 只有 `silent / edge / edge-py`，不含克隆。
-   两条路：① 用克隆服务按镜批量合成音频，再逐镜 `--from` 采用，**不用改代码**；
-   ② 要全自动，就在 `src/infrastructure/tts-client.ts` 增加一个 `TtsClient` 实现
-   （调服务商 API），并在 `createTtsClient` 注册——声音部的接口就是为换引擎留的。
+3. **克隆音色（Zero-shot，Qwen3-TTS，当前定档）**：内置 `MV_TTS=qwen3` provider，经常驻
+   worker 调本地 Qwen3-TTS-0.6B——只要一段 3-10 秒参考音频 + 该音频的逐字稿，不用训练模型。
+   模型只加载一次，逐镜复用：
+
+   ```bash
+   node scripts/run-voice.mjs <project-id>   # 已定档配置一键入口：模型/参考音频/语速全固化
+   npm run dev -- compose --project <id>     # 旁白换新后时间线自动作废，重排即可
+   ```
+
+   环境变量：`MAKEVIDEO_QWEN3_PYTHON`（venv 解释器）、`MAKEVIDEO_QWEN3_MODEL`（模型目录）、
+   `MAKEVIDEO_QWEN3_REF_AUDIO`（参考音频，存个人文档不入库）、`MAKEVIDEO_QWEN3_PROMPT_TEXT`
+   （该音频逐字稿）、`MAKEVIDEO_QWEN3_LANG`。
+
+   - 换声验收：合成后用本地 ASR（FunASR）逐字校验，全对才采纳——同参考音频下
+     Qwen3-TTS 6/6 全对，GPT-SoVITS 5/6，故定档 Qwen3（`MV_TTS=sovits` 适配器仍保留，
+     自行部署 `api_v2.py` 服务即可用）。
+   - `voice` 的 `--voice` 传文件路径时视为**本镜专用参考音频**（多角色片可逐镜换音色）。
+   - 接别的克隆服务同样只需实现 `TtsClient` 并注册 provider，时序对齐与校验逻辑不用改。
 
 > 旁白时长会驱动整条时间线，所以无论哪条路，都要让 `voice` 重新测一遍时长，
 > 再 `compose`——不要手工改 `durationMs`，那是音画同步不变量（V-CMP-001）。

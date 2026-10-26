@@ -204,6 +204,8 @@ export const ProjectMetaSchema = z.object({
   fps: z.number().default(30),
   genre: z.enum(GENRES).default('science-explainer'),
   assetPolicy: z.enum(['auto', 'ask', 'code-first', 'real-first']).default('auto'),
+  /** AI 生图授权位：只能由用户确认写入，compose 前强制校验（P5-E 闸门） */
+  aiConsent: z.boolean().default(false),
 });
 export type ProjectMeta = z.infer<typeof ProjectMetaSchema>;
 
@@ -310,6 +312,18 @@ export type Project = z.infer<typeof ProjectSchema>;
  * 风格不只给颜色和字体，还要说清「这一派用什么材质、什么维度、什么母题、禁用什么」，
  * 场景选择与场景生成都必须读它，否则风格只剩调色、素材仍是随机配图。
  */
+/** 真实素材的呈现契约：调色/颗粒/暗角/画幅/运镜，缺省值等于 P5 之前的写死值 */
+export const StyleMediaSchema = z.object({
+  grade: z.enum(['warm', 'neutral', 'cool', 'bleach', 'none']).default('warm'),
+  grain: z.number().min(0).max(1).default(0.13),
+  vignette: z.number().min(0).max(1).default(0.62),
+  letterbox: z.boolean().default(false),
+  /** auto：空镜横移、人物缓推、静物微推；static 才是真静止 */
+  motion: z.enum(['auto', 'ken-burns', 'static']).default('auto'),
+  fit: z.enum(['cover', 'contain']).default('cover'),
+});
+export type StyleMedia = z.infer<typeof StyleMediaSchema>;
+
 export const StyleVisualSchema = z.object({
   /** 视觉维度：2d 平面 / css3d 立体（透视+旋转）/ mixed 混用 */
   dimension: z.enum(['2d', 'css3d', 'mixed']).default('2d'),
@@ -323,6 +337,8 @@ export const StyleVisualSchema = z.object({
   texture: z.array(z.string()).default([]),
   /** 一句话素材语言（给 LLM 的风格指令，进 scene prompt） */
   note: z.string().default(''),
+  /** 真实素材镜的呈现参数（代码绘制镜不读） */
+  media: StyleMediaSchema.default({}),
 });
 export type StyleVisual = z.infer<typeof StyleVisualSchema>;
 

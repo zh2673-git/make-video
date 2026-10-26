@@ -84,7 +84,7 @@
 - 70/70 单元测试通过（含 tests/style-visual.test.ts 13 条）。
 - 真实 Chromium 逐帧 seek：同一 t 两次截图 SHA256 完全一致（3D 可复现）；不同 t 画面确实变化。
 - 两个 3D 模板在 css3d 风格下过校验、在 2d 风格下正确触发 V-STYLE-008 告警。
-- 演示片 `demos/style-material-3d.mp4`（12s / 1920×1080 / 30fps，无音轨）：
+- 演示片（12s / 1920×1080 / 30fps，无音轨，验收后随 demos 目录清理）：
   ① 周星驰式 css3d 等距舞台 ② 电影感暗调 mixed 三层纵深 ③ 苹果发布会 2d 平面排版，
   三镜帧间像素变化均确认（3D 转台/景深推进/排版进入各自生效）。
 
@@ -169,3 +169,86 @@
   运镜缺失（V-RHY-004）、模板表演缺位（flow.html 静默失配被三联动暴露）。
 - 交付物：mp4 + subtitles.srt + cut-audit.json + mixPlan（IR）+ photography/performance 工件。
 - 测试：29/29 通过（tsc 0 错误）。
+
+## P5 素材猎取 + 真实播放 + GPT-SoVITS 接入（2026-10-25）
+
+### 目标
+
+1. 用户说「按主题/风格找素材」时，agent 用自身检索工具在互联网找与讲稿内容对应的真实素材（人物/风景/物体/年代背景），代码只提供需求单、入库校验、风格化呈现、真实播放；不绑定任何固定图库。
+2. 用户不说找素材时，维持 `assetPolicy=auto` 的全代码绘制，不联网、不调用生图。
+3. AI 生图必须经用户显式授权，代码级闸门拦截，禁止静默消耗额度。
+4. 视频素材真实播放，不再退化为首帧静图。
+5. GPT-SoVITS 作为新的 TTS provider 接入，支持参考音频 + 逐字稿的零样本音色。
+
+### 本质定义与时空契约
+
+本质：**素材的「检索」交给 agent（外部时间流），引擎只做「契约 + 呈现」**。引擎不预测互联网内容，只保证素材进入后时空可控。
+
+- 空间归属：素材文件由 `materials/` 独占（复制入库，不引用外部路径）；镜头级副本在 `assets/<shotId>/`；渲染工程内的帧序列在 `remotion/media/<shotId>/frames/`，随 `clean` 回收。
+- 时间流形态：`material-plan → 检索(agent) → add-material → storyboard/confirm → compose → render` 顺序管道；播放时间轴由 GSAP 补间驱动，帧索引是合成时间的纯函数，保证逐帧 seek 可复现。
+- 规则拦截：素材合格性在入库时校验（分辨率/比例/时长）；AI 生图在 compose 前由 `meta.aiConsent` 拦截；视频帧数在 compose 时按镜头时长封闭计算。
+
+### 分层落点
+
+| 时空层 | 文件 | 改动 |
+|---|---|---|
+| 数据规范 | `src/core/schema.ts` | `StyleMediaSchema`（grade/grain/vignette/letterbox/motion/fit）、`visuals.media`、`ProjectMeta.aiConsent` |
+| 数据存储 | `src/domain/asset-sourcing.ts`、`src/infrastructure/ffmpeg-utils.ts` | 素材索引扩展（width/height/来源/授权/显式 tags）、入库校验、帧序列抽取 |
+| 数据流转 | `src/infrastructure/llm-client.ts`、`src/domain/material-plan.ts`（新）、`src/domain/composer.ts` | `material-plan` 任务与规则兜底；视频镜改帧序列播放；调色读风格包 |
+| 数据接口 | `src/interfaces/cli.ts` | `material-plan`、`add-material --shot/--tags/--url/--license`、`confirm --allow-ai`、`ttsProvider` 接受 `sovits` |
+| 数据存储（音频） | `src/infrastructure/tts-client.ts` | `GptSovitsTtsClient` + provider 注册 |
+
+### 阶段与验收
+
+- **A 素材契约**：schema + 索引扩展 + 入库校验（V-AST-006）。Q：宽度<1280 必须拒绝（err），宽度<1920 与比例偏差>12% 只告警（warn，竖构图人物照允许，由 `fit: contain` 兜底）；I：存量 `add-material <files...>` 行为不变。
+- **B 需求单**：`material-plan` 输出每镜 `{shotId, need, query, type, mustHave, avoid, reason}`；抽象概念/数据段强制 `code-scene`。Q：无 LLM 时规则兜底产出同样的 schema；I：不改 storyboard 现有决策。
+- **C 风格化呈现**：`buildMediaComposition` 读 `visuals.media`；缺省值等于当前写死值。Q：未配置风格包时像素等价；I：素材内容不重绘。
+- **D 真实播放**：`stageMedia` 视频抽帧（默认 24fps、1920 宽、循环补足镜头时长），GSAP 补间按合成时间换帧。Q：成片抽帧核对画面在变；I：时间线时长不变，音画仍同步。
+- **E AI 闸门**：`visual.kind='cloud'` 且 `aiConsent=false` → compose 报错。Q：未授权必失败；I：授权后原云端路径可用。
+- **F GPT-SoVITS**：`MV_TTS=sovits` 走 `/tts`，参考音频+逐字稿零样本；输出 WAV 用 ffprobe 量时长。Q：缺 env 时给出可操作报错；I：默认 provider 不变，存量工程不受影响。
+
+### 已评估不做
+
+- 在引擎内内置 Pexels/Unsplash 多源检索：与「agent 自行探索、不绑定来源」冲突，且要维护各家 key 与授权字段。
+- 素材镜改走独立 ffmpeg 合成再拼接：会丢掉溶解/擦除转场与统一字幕层，破坏现有剪辑契约。
+- 内嵌 `<video>` 逐帧播放：HyperFrames 逐帧 seek，video 解码时钟与截图时刻不可严格对齐（已在 `composer.ts` 注释中记录）。
+
+### 大范围改动合理性说明
+
+- 改动约 600 行、8 个文件。必要性：现有链路只支持「手写单条 query + 手动绑镜 + 文件名标签 + 首帧 + 写死调色」，无法满足「按稿子自动找素材、风格化、真实播放」；分散的小补丁会让素材逻辑散落在 CLI 与 composer 两处。
+- 风险控制：所有新行为都有缺省值或开关（`visuals.media` 缺省=现状；`MV_MEDIA_FPS` 可调；`sovits` 需显式选 provider），存量工程零迁移。
+- 验证方式：`npm run build` + `npm test` 全绿；素材入库用构造的超小图/超宽图验证拒绝路径；视频镜用 2 秒样片验证帧序列与成片抽帧。
+
+### 执行记录（2026-10-25）
+
+- 代码：`schema`（StyleMedia/aiConsent）、`asset-sourcing`（MaterialInput/checkMaterial/bindMaterial）、`ffmpeg-utils`（extractFrameSequence）、`composer`（素材分支/帧驱动/风格化/V-AI-001）、`material-plan`（新）、`llm-client`（material-plan 任务 + 离线兜底）、`tts-client`（GptSovitsTtsClient）、`cli`（material-plan / add-material 扩展 / confirm --allow-ai / sovits）。
+- 测试：新增 `tests/material.test.ts` 10 条；全套 `build` 通过、`test` 81/81 通过。
+- 等价性：`visuals.media` 缺省值等于旧写死值，未配置的风格包像素等价；默认 provider 未改。
+- 实测：构造 640×360 小图入库 → 非 `--strict` 报 V-AST-006 error 但继续（exit 0），`--strict` 拦截（exit 1）；2 秒 640×360 视频按 24fps/1920 宽抽帧得 55 帧、单帧 1920×1080（循环补足到 2.3s）；`MV_TTS=sovits` 缺 env 时给出可操作报错（exit 1）；`material-plan` 在 30 镜工程产出逐镜需求单，抽象段全为 `none`。
+- 待用户侧：GPT-SoVITS 本机服务 + 参考音频 + 逐字稿就绪后，配 env 跑 `voice` 实测真实克隆音色。
+
+## P6 克隆音色定档：Qwen3-TTS（2026-10-26）✓
+
+**为什么这么做**：GPT-SoVITS 实测暴露两类硬伤——参考音频码率低时克隆失真、合成偶发飘字
+（同条件 6 句 ASR 只有 5/6 全对），且语速 >1.15 会压变形字音。音色"像"和念得"对"同时要，
+需要换更强的克隆引擎。
+
+**替代选项**：CosyVoice2/3、F5-TTS、IndexTTS2.5、VoxCPM2 同代开源克隆；或不换引擎，
+继续调 GPT-SoVITS 参数 / 连生成多次取最优。
+
+**为什么这样选**：Qwen3-TTS-0.6B（2026-01 开源）公开指标领先（多语种 WER 1.835%、
+音色相似度 0.789 优于 ElevenLabs），0.6B 版仅需 4GB 显存本机可跑；实测同参考音频下
+6/6 逐字全对，胜过 GPT-SoVITS 的 5/6，且按语义自适应语气节奏，接近自然说话。
+
+### 执行记录（2026-10-26）
+
+- 代码：`tts-client` 新增 `Qwen3TtsClient`（`MV_TTS=qwen3`，常驻 worker `scripts/qwen3_tts_worker.py`
+  模型只加载一次，stdin/stdout 传 JSON 逐句合成）；`GptSovitsTtsClient` 保留为备选 provider。
+- 定档配置固化：`scripts/run-voice.mjs`（模型目录/参考音频/逐字稿/语速一键入口），
+  参考音频与原始录音、FunASR 校验脚本存个人文档 `c:\Users\LX\Documents\录音\make-video语音资产\`，不入库。
+- 环境坑：onnxruntime 1.31 导入即崩（0xC0000005）须降 1.20.1；qwen_tts 依赖 SoX 可执行文件；
+  独立 venv（`C:\Users\LX\.cache\qwen3tts-venv`）避免污染其他 torch 环境。
+- 实测：6 句旁白 ASR 逐字全对（GPT-SoVITS 同条件 5/6）；用户听感验收通过；
+  5 个存量工程全部用新音色重配重渲，成片时长与时间线误差 ≤27ms。
+- 清理：GPT-SoVITS 整合包（~10GB）、语音实验中间产物、demos 目录一并移除；
+  换声验收纪律写入 SKILL.md 工作规则第 11 条。
