@@ -152,6 +152,8 @@ make-video confirm [--allow-ai]                # 确认分镜表，放行采购�
 3. **分镜前一次确认**：素材决策 + 风格决策 + 导演批注摘要合成一张表；
    确认事件未到，不进入采购。
 4. **素材按项目目录隔离**；用户素材复制入库，禁引用原路径、禁写共享目录。
+   项目专属代码同理：画布库/逐镜程序放 `projects/<id>/canvas`（compose 时叠加到 `remotion/canvas`），
+   生成器与一次性工具放 `projects/<id>/tools`；`templates/` 只放通用预置，`scripts/` 只放跨项目工具。
 5. **长命令落脚本文件执行**（Windows/PowerShell 内联变量会被剥离）。
 6. **全程中文交互**；进度到 stderr，结果 JSON 到 stdout。
 7. **禁止伪造结果**：生成/渲染失败必须报明确错误，保留现场路径。

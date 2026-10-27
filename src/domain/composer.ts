@@ -415,6 +415,8 @@ async function emitHyperframesProject(
   await ensureDir(compDir);
   await copyDir(path.join(store.root, TEMPLATES_DIR, 'motion'), path.join(hfDir, 'motion'));
   await copyDir(path.join(store.root, TEMPLATES_DIR, 'canvas'), path.join(hfDir, 'canvas'));
+  // 项目专属画布叠加在预置之上：projects/<id>/canvas 与项目同生共死，不污染 templates
+  await copyDir(path.join(dir, 'canvas'), path.join(hfDir, 'canvas'));
 
   // 旁白音频复制进渲染项目根（音频引用不得 ../ 越界，否则文件服务器拒绝 → 成片无声）
   const voDir = path.join(hfDir, 'audio', 'vo');
