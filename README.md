@@ -11,6 +11,14 @@
 《工具理性的牢笼：文明越强大，人越容易被手段吞噬》——26 镜、2 分 21 秒，全片由 make-video 代码逐镜绘制。
 [▶ 在线观看](https://zh2673-git.github.io/make-video/showcase.html)
 
+## 实战案例：DataDone
+
+[![《DataDone · 纪检监察数据分析》实战案例](docs/media/datadone-poster.jpg)](https://zh2673-git.github.io/make-video/datadone.html)
+
+给真实产品拍的介绍片——18 镜、1 分 57 秒，真实界面截图与代码绘制画面混合，
+卡通头像出镜讲解，旁白为本人克隆音色。
+[▶ 在线观看](https://zh2673-git.github.io/make-video/datadone.html)
+
 ## 特性
 
 - **电影部门制**：编剧 → 导演 → 美术摄影 → 采购 → 声音 → 剪辑 → 工程，七部门 14 工件
