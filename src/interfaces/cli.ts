@@ -42,7 +42,7 @@ function fail(e: unknown): never {
 
 function ttsProvider(): TtsProvider {
   const v = process.env['MV_TTS'] ?? 'auto';
-  if (v === 'edge' || v === 'edge-py' || v === 'silent' || v === 'sovits' || v === 'auto') return v;
+  if (v === 'edge' || v === 'edge-py' || v === 'silent' || v === 'sovits' || v === 'qwen3' || v === 'auto') return v;
   return 'auto';
 }
 

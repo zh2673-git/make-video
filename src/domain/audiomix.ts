@@ -37,19 +37,49 @@ export async function buildVoTrack(
   return out;
 }
 
-// 程序化 BGM：低沉 pad（三正弦叠加 + 慢颤音 + 低通），无音源依赖
+// 程序化 BGM：双和弦慢速 pad（Dm → Bb）+ 极轻空气层，无音源依赖
+// 结构：低频根音 + 五度 + 三度叠置，各自极慢颤音形成漂移；中段交叉换和弦给出情绪弧线
 export async function buildBgm(totalMs: number, dir: string): Promise<string> {
   await ensureDir(dir);
   const out = path.join(dir, 'bgm-raw.wav');
-  const d = (totalMs / 1000).toFixed(3);
+  const total = totalMs / 1000;
+  const d = total.toFixed(3);
+  const shiftA = Math.max(24, total * 0.42); // 和弦开始换位
+  const shiftB = shiftA + 12;
+  const fadeOut = Math.max(2.0, total - 3.2);
+  const bedA = `volume='if(lt(t,${shiftA.toFixed(2)}),1,if(lt(t,${shiftB.toFixed(2)}),(${shiftB.toFixed(2)}-t)/12,0))':eval=frame`;
+  const bedB = `volume='if(lt(t,${shiftA.toFixed(2)}),0,if(lt(t,${shiftB.toFixed(2)}),(t-${shiftA.toFixed(2)})/12,1))':eval=frame`;
   await runFfmpeg([
-    '-f', 'lavfi', '-i', `sine=f=55:d=${d}`,
-    '-f', 'lavfi', '-i', `sine=f=110.3:d=${d}`,
-    '-f', 'lavfi', '-i', `sine=f=164.8:d=${d}`,
-    '-f', 'lavfi', '-i', `sine=f=220.6:d=${d}`,
+    // Dm 床：D2 A2 D3 F3 A3
+    '-f', 'lavfi', '-i', `sine=f=73.42:d=${d}`,
+    '-f', 'lavfi', '-i', `sine=f=110.00:d=${d}`,
+    '-f', 'lavfi', '-i', `sine=f=146.83:d=${d}`,
+    '-f', 'lavfi', '-i', `sine=f=174.61:d=${d}`,
+    '-f', 'lavfi', '-i', `sine=f=220.00:d=${d}`,
+    // Bb 床：Bb1 F2 Bb2 D3 F3
+    '-f', 'lavfi', '-i', `sine=f=58.27:d=${d}`,
+    '-f', 'lavfi', '-i', `sine=f=87.31:d=${d}`,
+    '-f', 'lavfi', '-i', `sine=f=116.54:d=${d}`,
+    '-f', 'lavfi', '-i', `sine=f=146.83:d=${d}`,
+    '-f', 'lavfi', '-i', `sine=f=174.61:d=${d}`,
+    // 空气层：粉噪滤成极轻的风
+    '-f', 'lavfi', '-i', `anoisesrc=color=pink:d=${d}`,
     '-filter_complex',
-    '[0:a]volume=0.5[a];[1:a]volume=0.35[b];[2:a]volume=0.22[c];[3:a]volume=0.12[d];' +
-      '[a][b][c][d]amix=4:normalize=0,tremolo=f=0.13:d=0.55,lowpass=f=420,volume=0.9[out]',
+    '[0:a]volume=0.30,tremolo=f=0.11:d=0.35[a0];' +
+      '[1:a]volume=0.22,tremolo=f=0.13:d=0.30[a1];' +
+      '[2:a]volume=0.14,tremolo=f=0.17:d=0.25[a2];' +
+      '[3:a]volume=0.09,tremolo=f=0.10:d=0.40[a3];' +
+      '[4:a]volume=0.06,tremolo=f=0.12:d=0.30[a4];' +
+      `[a0][a1][a2][a3][a4]amix=5:normalize=0,lowpass=f=900,${bedA}[bedA];` +
+      '[5:a]volume=0.22,tremolo=f=0.11:d=0.35[b0];' +
+      '[6:a]volume=0.15,tremolo=f=0.14:d=0.30[b1];' +
+      '[7:a]volume=0.10,tremolo=f=0.18:d=0.25[b2];' +
+      '[8:a]volume=0.06,tremolo=f=0.12:d=0.30[b3];' +
+      '[9:a]volume=0.04,tremolo=f=0.10:d=0.35[b4];' +
+      `[b0][b1][b2][b3][b4]amix=5:normalize=0,lowpass=f=900,${bedB}[bedB];` +
+      '[10:a]highpass=f=220,lowpass=f=1000,volume=0.18,tremolo=f=0.10:d=0.60[air];' +
+      `[bedA][bedB][air]amix=3:normalize=0,lowpass=f=1300,volume=1.40,` +
+      `afade=t=in:st=0:d=2.5,afade=t=out:st=${fadeOut.toFixed(2)}:d=3.2[out]`,
     '-map', '[out]', out,
   ]);
   return out;
