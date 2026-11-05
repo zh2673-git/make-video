@@ -5,11 +5,34 @@ description: 自动生成视频 skill：输入主题/讲稿/素材，按电影�
 
 # make-video — 代码绘制优先的视频编译器
 
-> **仓库与更新源**：本项目独立维护在 <https://github.com/zh2673-git/make-video>（public）。
-> 本目录（`rsi-agent/skills/make-video`）是该仓库的工作副本，**不设 submodule**、不做镜像同步——
-> 修 bug / 加能力请直接在 `skills/make-video` 里改，验证通过后提交到上面那个仓库（`origin` 指向它时
-> `git push` 即可，也可用 `gh` 手动同步）。**任何 make-video 的更新都以该独立仓库为发布源**，
-> 本 skill 文档只保留用法与纪律，不复制实现细节。
+> **单一发布源**：本项目独立维护在 <https://github.com/zh2673-git/make-video>（public）。
+>
+> 依赖关系是**单向**的：独立仓库是唯一事实源，`rsi-agent/skills/make-video` 只是它的本地检出（checkout），
+> 随独立仓库更新而更新。所以——
+>
+> - **改代码、提交、打 tag、发 release 一律在独立仓库这一侧完成**，不要在本目录里改完就完事；
+> - 本目录里的改动必须推回独立仓库（见下方「与独立仓库同步」），
+>   否则下一次从仓库拉取会把本地改动覆盖掉；
+> - 本目录**不存放任何项目产物**（`projects/` 已 gitignore）：视频案例、渲染帧、素材属于用户数据，
+>   只放 `outputs/`，不进仓库、不进 skill。
+>
+> 本 SKILL.md 随仓库一起版本化，所以「更新 skill 文档」= 在仓库里改 `SKILL.md` 并推送。
+
+## 与独立仓库同步
+
+```bash
+# 首次：在 rsi-agent 根目录，把 skills/make-video 换成独立仓库的检出
+git clone https://github.com/zh2673-git/make-video.git skills/make-video
+
+# 日常：拉取上游更新（本目录就是仓库工作区）
+cd skills/make-video && git pull --ff-only
+
+# 在本地做了改动（修 bug/加能力）→ 验证后推回发布源
+cd skills/make-video && npm test && git add -A && git commit -m "fix: ..." && git push
+```
+
+判定标准：任何在本目录产生、却**没有**出现在 <https://github.com/zh2673-git/make-video> 的改动，
+都视为未完成——下次 `git pull` 时它就是隐患。
 
 ## 何时触发本 skill
 
