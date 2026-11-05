@@ -220,6 +220,413 @@
     return ensureTimeline();
   };
 
+  /* ---------- 动效语法原语（P7：吸收阿杜 adu-motion-video + 花叔 huashu-art-motion） ----------
+   * 两家共同铁律，本段全部遵守：
+   *   1) 动效必须有语义动机——原语只负责「怎么动」，动机由场景作者写；
+   *   2) 重音是稀缺资源——slam/punch/whip 是标点，受 V-MOT-013 全片≤1/3 约束；
+   *   3) 画面里一直有事发生——主体主动作 × 环境母题循环分离（motifLoop）；
+   *   4) 时间纯函数——全部有界补间，逐帧 seek 可复现；无 GSAP 时降级静态终态。
+   * 参数默认值的出处见 PLAN.md P7「原语增补」表（来自两家实测）。 */
+
+  // 动效常量唯一入口：改这里等于改全片观感，不要在场景里散写魔数
+  var MO = {
+    slam: { dur: 0.17, from: 1.55, mid: 0.94, ease: 'power4.in' },
+    stagger: { secondary: 180, tertiary: 320, dur: 0.55, ease: 'expo.out' },
+    morph: { out: 0.24, resize: 0.42, inn: 0.36 },
+    counter: { dur: 0.9, ease: 'quint.out' },
+    highlight: { dur: 0.5, ease: 'sine.inOut' },
+    cards: { lift: 0.42, amp: 1.06, neighbor: 0.97 },
+    punch: { dur: 0.28, amp: 1.22, ease: 'power2.out' },
+    whip: { dur: 0.28, blur: 12, ease: 'expo.inOut' },
+    mask: { dur: 0.5, ease: 'power2.inOut' },
+    bands: { dur: 0.32, stagger: 0.06 },
+    motif: { dur: 2.4, amp: 0.8 },
+  };
+  MV.MO = MO;
+
+  function num(v, def) {
+    var n = Number(v);
+    return isFinite(n) ? n : def;
+  }
+
+  /** 砸入：大字/数字/盖章落下的那一下。1.55 → 0.94 → 1.0，0.17s power4.in。
+   *  一镜最多一次（V-MOT-013 把它计入全片重音预算）。 */
+  MV.slam = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var m = MO.slam;
+    var dur = num(opts.duration, m.dur * 1000) / 1000;
+    var at = num(opts.delay, 0) / 1000;
+    tl.fromTo(
+      nodes,
+      { scale: num(opts.from, m.from), opacity: 0 },
+      { scale: m.mid, opacity: 1, duration: dur, ease: m.ease },
+      at,
+    );
+    tl.to(nodes, { scale: 1, duration: dur * 1.6, ease: 'back.out(2.4)' }, at + dur);
+    return tl;
+  };
+
+  /** 错峰入场：按 data-rank（primary/secondary/tertiary）分级延迟。
+   *  阿杜「主卡先落位、邻卡压后、配角稍后响应」——禁止所有元素同拍响。 */
+  MV.staggeredIn = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var s = MO.stagger;
+    var dur = num(opts.duration, s.dur * 1000) / 1000;
+    var base = num(opts.delay, 0) / 1000;
+    var from = opts.from || { opacity: 0, y: 38 };
+    var secMs = num(opts.secondary, s.secondary);
+    var terMs = num(opts.tertiary, s.tertiary);
+    var rankDelay = { primary: 0, secondary: secMs / 1000, tertiary: terMs / 1000 };
+    for (var i = 0; i < nodes.length; i += 1) {
+      var n = nodes[i];
+      var rank = (n.getAttribute && n.getAttribute('data-rank')) || 'primary';
+      var at = base + (rankDelay[rank] === undefined ? rankDelay.secondary : rankDelay[rank]);
+      tl.from(
+        n,
+        {
+          opacity: from.opacity === undefined ? 0 : from.opacity,
+          y: from.y === undefined ? 38 : from.y,
+          duration: dur,
+          ease: s.ease,
+        },
+        at,
+      );
+    }
+    return tl;
+  };
+
+  /** 连续形变：同一对象「旧字先退 → 再变尺寸 → 新字后进」三步串行。
+   *  阿杜要点：窗口快速缩成文件时，不能把整页正文同帧缩成小点。
+   *  opts: { delay, out, resize, inn, to:{scale,width,height,opacity} } */
+  MV.morphTo = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var m = MO.morph;
+    var outD = num(opts.out, m.out * 1000) / 1000;
+    var resizeD = num(opts.resize, m.resize * 1000) / 1000;
+    var at = num(opts.delay, 0) / 1000;
+    tl.to(nodes, { opacity: 0, duration: outD, ease: 'power2.in' }, at);
+    var to = { opacity: 1, duration: resizeD, ease: 'power2.inOut' };
+    if (opts.to) for (var k in opts.to) to[k] = opts.to[k];
+    tl.to(nodes, to, at + outD);
+    return tl;
+  };
+
+  /** 数字滚动：诚实数值 + 落定在口播说到它那一刻（花叔 t3 财经 / y5 大数字）。
+   *  数值永远来自文案，动画只决定怎么出现（V-CHT-002 禁编造数据）。 */
+  MV.counter = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    var from = num(opts.from, 0);
+    var to = num(opts.to, 100);
+    var fmt =
+      typeof opts.fmt === 'function'
+        ? opts.fmt
+        : function (v) {
+            return (opts.prefix || '') + v.toFixed(num(opts.decimals, 0)) + (opts.suffix || '');
+          };
+    if (!tl) {
+      for (var i = 0; i < nodes.length; i += 1) if (nodes[i]) nodes[i].textContent = fmt(to);
+      return tl;
+    }
+    var c = MO.counter;
+    var dur = num(opts.duration, c.dur * 1000) / 1000;
+    var at = num(opts.delay, 0) / 1000;
+    var box = { v: from };
+    tl.to(
+      box,
+      {
+        v: to,
+        duration: dur,
+        ease: opts.easing || c.ease,
+        onUpdate: function () {
+          for (var j = 0; j < nodes.length; j += 1) if (nodes[j]) nodes[j].textContent = fmt(box.v);
+        },
+      },
+      at,
+    );
+    return tl;
+  };
+
+  /** 高亮扫过：荧光笔/红线从一端画到另一端（花叔 y2「线是一顿一顿画上去的」）。
+   *  用 scaleX 0→1 + transformOrigin 实现，不改元素宽度（避免重排导致 seek 抖动）。 */
+  MV.highlight = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var h = MO.highlight;
+    var dur = num(opts.duration, h.dur * 1000) / 1000;
+    var at = num(opts.delay, 0) / 1000;
+    tl.fromTo(
+      nodes,
+      { scaleX: 0, transformOrigin: opts.origin || '0% 50%' },
+      { scaleX: 1, duration: dur, ease: h.ease },
+      at,
+    );
+    return tl;
+  };
+
+  /** 卡片流转：主卡抬升、邻卡压后、被选中的接管。
+   *  阿杜「主卡抬升，邻卡压后；动作、落点、读字留白分开」。 */
+  MV.cards = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var c = MO.cards;
+    var lift = num(opts.duration, c.lift * 1000) / 1000;
+    var hero = num(opts.hero, 0);
+    var at = num(opts.delay, 0) / 1000;
+    var step = num(opts.neighborDelay, MO.stagger.secondary) / 1000;
+    for (var i = 0; i < nodes.length; i += 1) {
+      var isHero = i === hero;
+      tl.to(
+        nodes[i],
+        {
+          scale: isHero ? c.amp : c.neighbor,
+          y: isHero ? -14 : 6,
+          opacity: isHero ? 1 : 0.68,
+          duration: lift,
+          ease: isHero ? 'back.out(1.8)' : 'power2.out',
+        },
+        at + (isHero ? 0 : step * (i + 1)),
+      );
+    }
+    return tl;
+  };
+
+  /** 快推标点：推近 18-32% 后**停住**（不是慢推到底）。重音专用，受 V-MOT-013 约束。 */
+  MV.punch = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'scale(' + MO.punch.amp + ')');
+      return tl;
+    }
+    var p = MO.punch;
+    var dur = num(opts.duration, p.dur * 1000) / 1000;
+    var at = num(opts.delay, 0) / 1000;
+    tl.fromTo(
+      nodes,
+      { scale: 1, transformPerspective: 1200 },
+      { scale: num(opts.amp, p.amp), duration: dur, ease: p.ease },
+      at,
+    );
+    return tl;
+  };
+
+  /** 镜内甩镜：视线突然转移（「我打开电脑 →（屏幕）」）。带运动模糊，0.26-0.30s。
+   *  与剪辑层 whip-pan 转场分工：这个在镜内，那个在镜间。 */
+  MV.whip = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var w = MO.whip;
+    var dur = num(opts.duration, w.dur * 1000) / 1000;
+    var at = num(opts.delay, 0) / 1000;
+    var dir = opts.dir === 'left' ? -1 : 1;
+    var px = num(opts.blur, w.blur);
+    tl.fromTo(
+      nodes,
+      { xPercent: dir * 18, filter: 'blur(' + px + 'px)', opacity: 0.3 },
+      { xPercent: 0, filter: 'blur(0px)', opacity: 1, duration: dur, ease: w.ease },
+      at,
+    );
+    return tl;
+  };
+
+  /** 慢漂：整镜 1-4%/s 匀速慢移。**只给氛围镜/艺术风格镜**——
+   *  解说片里每镜都慢推几个百分点就是 PPT（花叔点名批评的那支 102 秒短片）。 */
+  MV.drift = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var dur = num(opts.duration, 12000) / 1000;
+    var rate = num(opts.rate, 2.5); // 整镜缩放百分比（≈1-4%/s）
+    var xP = num(opts.xPercent, 0);
+    if (opts.dir === 'out') {
+      tl.fromTo(nodes, { scale: 1 + rate / 100, xPercent: -xP }, { scale: 1, xPercent: xP, duration: dur, ease: 'none' }, 0);
+    } else {
+      tl.fromTo(nodes, { scale: 1, xPercent: -xP }, { scale: 1 + rate / 100, xPercent: xP, duration: dur, ease: 'none' }, 0);
+    }
+    return tl;
+  };
+
+  /** 擦除揭示：内容从掩码里被「画」出来（花叔 y3 白板笔尖揭开线稿）。
+   *  opts.dir: left|right|up|down|circle */
+  MV.maskReveal = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var m = MO.mask;
+    var dur = num(opts.duration, m.dur * 1000) / 1000;
+    var at = num(opts.delay, 0) / 1000;
+    var dir = opts.dir || 'left';
+    var fromIns =
+      dir === 'right' ? 'inset(0 0 0 100%)'
+      : dir === 'up' ? 'inset(100% 0 0 0)'
+      : dir === 'down' ? 'inset(0 0 100% 0)'
+      : 'inset(0 100% 0 0)';
+    var from = dir === 'circle' ? 'circle(0% at 50% 50%)' : fromIns;
+    var to = dir === 'circle' ? 'circle(75% at 50% 50%)' : 'inset(0 0 0 0)';
+    tl.fromTo(nodes, { clipPath: from, webkitClipPath: from }, { clipPath: to, webkitClipPath: to, duration: dur, ease: m.ease }, at);
+    return tl;
+  };
+
+  /** 色带过渡：几条实色带扫过换场（花叔 y5 fillZoom / bands）。
+   *  比「淡到黑再亮起」有方向感，且不丢画面。 */
+  MV.bands = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var b = MO.bands;
+    var dur = num(opts.duration, b.dur * 1000) / 1000;
+    var step = num(opts.stagger, b.stagger * 1000) / 1000;
+    var at = num(opts.delay, 0) / 1000;
+    var down = opts.dir === 'down';
+    for (var i = 0; i < nodes.length; i += 1) {
+      tl.fromTo(
+        nodes[i],
+        { yPercent: down ? -100 : 100 },
+        { yPercent: 0, duration: dur, ease: 'power3.inOut' },
+        at + i * step,
+      );
+    }
+    return tl;
+  };
+
+  /** 母题循环：环境层「一直是活的」——每幕一个主动作 + 若干母题循环。
+   *  必须与主体动作作用在不同元素上（否则抢属性、变成整体抖动）。
+   *  opts.kind: float|pulse|rotate|shimmer */
+  /** 母题循环的 kind 表：每个 kind 对应一种「环境在动」的视觉语言。
+   *  铁律（阿杜「每幕 2 个母题循环」+ 花叔「画要一直是活的」）：
+   *  画面里必须一直有事发生，但**不能抢主体的属性**——所以每种 kind 动的是不同 CSS 属性，
+   *  且幅度必须看得见（位移 ≥ 元件自身尺寸的 2%，或透明度 ≥ 0.2 的变化）。
+   *  幅度定价都在一次「参数只动 0.3 时肉眼看不出来」的实测之后重定过。 */
+  var MOTIF_KINDS = {
+    // 上下漂浮：位移是 amp*6(px)。amp 0.3 只有 ±1.8px —— 所以默认值提到 0.8（±4.8px）
+    float: function (nodes, amp, dur, reps, at, tl) {
+      tl.fromTo(nodes, { y: amp * 6 }, { y: -amp * 6, duration: dur, ease: 'sine.inOut', repeat: reps, yoyo: true }, at);
+    },
+    // 缩放呼吸：amp 0.3 → ±3.75%，看得见且不抢主体
+    pulse: function (nodes, amp, dur, reps, at, tl) {
+      tl.fromTo(nodes, { scale: 1 - amp / 8 }, { scale: 1 + amp / 8, duration: dur, ease: 'sine.inOut', repeat: reps, yoyo: true }, at);
+    },
+    // 转台：amp 0.5 → ±1.5°，够了；再大就破坏版式
+    rotate: function (nodes, amp, dur, reps, at, tl) {
+      tl.fromTo(nodes, { rotation: -amp * 3 }, { rotation: amp * 3, duration: dur, ease: 'sine.inOut', repeat: reps, yoyo: true }, at);
+    },
+    // 明暗闪动：透明度 0.35↔0.95，是「光在呼吸」的主来源
+    shimmer: function (nodes, amp, dur, reps, at, tl) {
+      tl.fromTo(nodes, { opacity: 0.45 }, { opacity: 0.95, duration: dur / 2, ease: 'sine.inOut', repeat: reps * 2, yoyo: true }, at);
+    },
+    // 扫描：整层横向掠过（网格/背景纹理专用）。走 x 而不是 y，
+    // 因为横移在 16:9 里比上下抖动更像「镜头在扫」，也不会让版式上下跳。
+    scan: function (nodes, amp, dur, reps, at, tl) {
+      tl.fromTo(nodes, { x: -amp * 40, backgroundPosition: '0% 0%' },
+        { x: amp * 40, backgroundPosition: '100% 0%', duration: dur, ease: 'none', repeat: reps, yoyo: true }, at);
+    },
+    // 光带横穿：单向匀速走完再从头（不 yoyo，像激光扫过去）
+    sweep: function (nodes, amp, dur, reps, at, tl) {
+      tl.fromTo(nodes, { xPercent: -amp * 60 }, { xPercent: amp * 180, duration: dur, ease: 'none', repeat: reps }, at);
+    },
+    // 缓漂：极慢的整体位移，氛围镜用；比 float 更慢更远
+    drift: function (nodes, amp, dur, reps, at, tl) {
+      tl.fromTo(nodes, { x: -amp * 22, y: amp * 8 },
+        { x: amp * 22, y: -amp * 8, duration: dur * 2, ease: 'sine.inOut', repeat: reps, yoyo: true }, at);
+    },
+    // 呼吸（幅度更大、周期更长，用于大块背景色块/光晕）
+    breathe: function (nodes, amp, dur, reps, at, tl) {
+      tl.fromTo(nodes, { scale: 1 - amp / 5, opacity: 0.55 },
+        { scale: 1 + amp / 5, opacity: 1, duration: dur * 1.5, ease: 'sine.inOut', repeat: reps, yoyo: true }, at);
+    },
+    // 挤压：纵向压缩来回（「被压紧」的感觉），只动 scaleY，不碰版式宽度
+    compress: function (nodes, amp, dur, reps, at, tl) {
+      tl.fromTo(nodes, { scaleY: 1 - amp / 4 }, { scaleY: 1 + amp / 12, duration: dur, ease: 'sine.inOut', repeat: reps, yoyo: true }, at);
+    },
+    // 沉降：从略高处缓慢落下并停住感（单程 + 小幅回弹），收尾镜用
+    settle: function (nodes, amp, dur, reps, at, tl) {
+      tl.fromTo(nodes, { y: -amp * 14 }, { y: amp * 4, duration: dur * 1.5, ease: 'power2.out', repeat: reps, yoyo: true }, at);
+    },
+    // 排空：透明度单向衰减再回来（「被抽走」），比 shimmer 慢且单向
+    drain: function (nodes, amp, dur, reps, at, tl) {
+      tl.fromTo(nodes, { opacity: 1 }, { opacity: 0.35, duration: dur * 1.2, ease: 'sine.inOut', repeat: reps, yoyo: true }, at);
+    },
+  };
+  MV.MOTIF_KINDS = MOTIF_KINDS;
+
+  MV.motifLoop = function (sel, opts) {
+    opts = opts || {};
+    var nodes = $(sel);
+    var tl = ensureTimeline();
+    if (!tl) {
+      finalize(nodes, 'none');
+      return tl;
+    }
+    var m = MO.motif;
+    var amp = num(opts.amp, m.amp);
+    var dur = num(opts.duration, m.dur * 1000) / 1000;
+    var kind = opts.kind || 'float';
+    // 有界 repeat：镜长未知时按 16s 上限，超出部分自然静止（时间线必须有限）
+    var reps = Math.max(1, Math.round(num(opts.span, 16) / dur / 2));
+    var at = num(opts.delay, 0) / 1000;
+
+    // 未实现的 kind 一律显式告警，绝不静默落进 float。
+    // 教训（2026-11-05）：模板按语义写了 sweep/breathe/scan/drain/compress/settle/drift，
+    // 库里只实现四种，其余全落 else 变成 ±1.6px 的 y 位移——渲染出来是「开头动一下、
+    // 剩下四秒完全静止」（实测静止帧 88-93%）。静默降级比报错危险得多。
+    if (!MOTIF_KINDS[kind]) {
+      if (global.console && global.console.warn) {
+        global.console.warn('[motion-lib] motifLoop: 未知 kind "' + kind + '"，按约定降级为 float');
+      }
+      kind = 'float';
+    }
+    MOTIF_KINDS[kind](nodes, amp, dur, reps, at, tl);
+    return tl;
+  };
+
   /* ---------- 3D 原语（素材语言层：风格声明 css3d 时由场景调用） ----------
    * 全部写成「有界 repeat 的 GSAP 补间」而不是 requestAnimationFrame：
    * 渲染器逐帧 seek 时间线，动画必须是时间的纯函数，rAF 会脱离 seek 变成随机画面。

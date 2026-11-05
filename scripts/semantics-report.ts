@@ -1,9 +1,14 @@
 import { promises as fs } from 'node:fs';
 import { pickCanvasProgram, pickTemplateBySemantics } from '../src/domain/scene-semantics.js';
 
-// 读参考片项目的真实讲稿（56 段）
+// 读指定项目的真实讲稿，report 语义分配
+const id = process.argv[2];
+if (!id) {
+  console.error('用法: npx tsx scripts/semantics-report.ts <project-id>');
+  process.exit(1);
+}
 const raw = JSON.parse(
-  await fs.readFile('projects/黑洞是怎么形成的-mvmb1dqz/project.json', 'utf8'),
+  await fs.readFile(`projects/${id}/project.json`, 'utf8'),
 ) as { script: { segments: Array<{ id: string; text: string }> } };
 const segs = raw.script.segments;
 const CANVAS = ['s01', 's02', 's03', 's04', 's05', 's06', 's07', 's08'];
