@@ -1,6 +1,7 @@
 import { mvError, ERR } from '../core/errors.js';
 import { LLM_RETRY_MAX, PLACEHOLDER_MARK } from '../core/constants.js';
 import { pickCanvasProgram, bestTemplate, pickTemplateBySemantics } from '../domain/scene-semantics.js';
+import { MOTION_WHITELIST, CAMERA_MOVES, ACCENT_PRIMITIVES } from '../core/validators/scene.js';
 
 export type LlmTaskKind =
   | 'script'
@@ -81,7 +82,7 @@ function unwrapArray(parsed: unknown): unknown {
 function buildPrompt(task: LlmTask): Array<{ role: string; content: string }> {
   const sys =
     task.kind === 'scene'
-      ? SCENE_SYSTEM_PROMPT
+      ? buildSceneSystemPrompt()
       : task.kind === 'script'
         ? SCRIPT_SYSTEM_PROMPT
         : task.kind === 'storyboard'
@@ -99,19 +100,56 @@ function buildPrompt(task: LlmTask): Array<{ role: string; content: string }> {
   ];
 }
 
-/** 场景生成系统提示词（docs/04 美术摄影部）：按剧本语义拍，不吃大锅饭 */
-const SCENE_SYSTEM_PROMPT = `你是视频编译器的美术摄影部场景画师。根据给定镜头的旁白语义与导演视觉意图，生成一个 HyperFrames 单场景 HTML。只输出合法 JSON：{"html": "<!doctype html>..."}。
+/**
+ * 场景生成系统提示词（docs/04 美术摄影部）：按剧本语义拍，不吃大锅饭。
+ *
+ * v1.1.2 修订：原先把 MV.enter/idle/to/from/fromTo/... 手写进提示词，
+ * 但 motion-lib 里根本没有 MV.from / MV.to / MV.fromTo —— 校验器按 MOTION_WHITELIST
+ * 判「引用非白名单原语」直接打回。模型照提示词写就必被拒，重试 2 次仍写它，
+ * 耗尽后静默回退 forge 模板：实测案例 30 镜只有 8 镜是 LLM 画的，22 镜是模板，
+ * 于是「看起来是成套片子，其实 22 张是拼字板」。
+ *
+ * 现在原语清单一律由 MOTION_WHITELIST 单向派生（唯一事实源），提示词不再手写枚举——
+ * 手工维护两份清单迟早漂移，而漂移的代价是整片画面降级成模板。
+ */
+/**
+ * MOTION_WHITELIST 里还挂着纯数据导出（MV.MO / MV.MOTIF_KINDS），它们不是可调用原语，
+ * 提示词与校验都不是针对它们的——统一在此排除，避免提示词出现「MV.MO 能调用」的误导。
+ */
+const NOT_PRIMITIVES = new Set(['MO', 'MOTIF_KINDS']);
+
+export function buildSceneSystemPrompt(): string {
+  // 保留完整 MV.xxx 形式：去掉前缀会让「写成 MV.xxx」的说明与清单本身不一致
+  const prims = MOTION_WHITELIST.filter((p) => !NOT_PRIMITIVES.has(p)).join('/');
+  return `你是视频编译器的美术摄影部场景画师。根据给定镜头的旁白语义与导演视觉意图，生成一个 HyperFrames 单场景 HTML。只输出合法 JSON：{"html": "<!doctype html>..."}。
 
 硬性契约（校验器逐条把关，违反即打回）：
 1. 完整骨架：<body data-scene-id="给定的sceneId"> 内有 .stage 容器；末尾 <script src="../motion/motion-lib.js"></script> 与一个 document.addEventListener('DOMContentLoaded', ...) 注册动画。
 2. 画面必须表达本镜旁白的具体含义（人/物/数字/因果/过程），禁止通用装饰凑数，禁止出现旁白原文或导演指令文本。
-3. 动画只用给定白名单原语 MV.enter/idle/to/from/fromTo/emphasis/performance/camera 与动作谱 actionSheet.requiredPrimitives 点名的原语（MV.slam/staggeredIn/morphTo/counter/highlight/cards/punch/whip/drift/maskReveal/bands/motifLoop），缓动只用给定的 easing，时长只允许 200-400/400-800/300-600/1200-2000ms。
-4. **动作谱就是施工图**（payload.actionSheet）：prepare/main/settle/secondary/cameraPath/soundCue/motif 逐条落实；requiredPrimitives 列出的每个原语必须真的调用一次（缺一个校验器打回）。MV.motifLoop 必选且 amp ≥ 0.5（动 1-2px 等于没动）。
-5. 主语唯一（.subject 或 .title 等恰好 1 个），辅助元素 opacity ≤ 0.7，同屏运动元素 ≤ 3、位移方向 ≤ 2。
+   **屏上文字纪律**（V-SCENE-005 判 error）：旁白里任何连续 4 个汉字都不得出现在画面文字里，也不得用旁白做标题。
+   若这一镜确实需要文字，只允许：① 概括成数字/专名/缩写（旁白说"同一时间"，屏上写"4 路并行"）；② 短标签（≤4 字且非旁白原文，如"取指""译码"）；③ 标签元素必须带 class="caption"（或 hint/sub），校验器会把它当字幕区跳过。标题类文字同理，只能写本镜的抽象结论，不能抄旁白。
+3. 动画原语**只有**这些（MV. 前缀，写成 MV.xxx）：${prims}。
+   此外动作谱 actionSheet.requiredPrimitives 点名的原语必须全部真的调用。**白名单之外的 MV.xxx 一律判打回**——写之前先对照上面这份清单，不要臆造 MV.from / MV.to / MV.fromTo / MV.fade 之类不存在的原语。
+   缓动只能取：power1-4 的 .in/.out/.inOut、sine、expo、quint、back.out、elastic.out、none。时长只允许 150-200/200-400/400-800/300-600/1200-2000ms。
+4. **动作谱就是施工图**（payload.actionSheet）：prepare/main/settle/secondary/cameraPath/soundCue/motif 逐条落实；requiredPrimitives 列出的每个原语必须真的调用一次（缺一个校验器打回）。MV.motifLoop 是**必选**（缺了整镜打回），且 amp ≥ 0.5（动 1-2px 等于没动）。
+4b. **重音是预算，不是强调语气**（V-MOT-013）：全片只有 ${ACCENT_PRIMITIVES.join('/')} 算重音标点，
+   总预算 payload.accentCap 镜（≈ 总镜数 1/3）——全篇都加粗等于没有重点。
+   payload.accentAllowed 为 **false 时本镜一个重音标点都不能用**：改用 enter/staggeredIn/highlight/
+   morphTo/counter/cards 等非重音原语表达主动作（它们同样有力，只是不占预算）；
+   为 true 时可用**至多一个**。requiredPrimitives 若已含重音原语则以动作谱为准（动作谱优先）。
+5. **主语唯一（最容易踩，务必先写骨架）**：必须**恰好有一个**元素带 class="subject"（或 title/hero 之一，三者合计只能 1 个）。
+   最小骨架照抄，再往里填内容：
+     <div class="stage">
+       <div class="subject">这一镜的主角（一个词/一个数字/一个图形）</div>
+       <div class="deco">辅助元素，opacity ≤ 0.7</div>
+     </div>
+   自检：输出前数一遍 HTML 里 class="subject|title|hero" 出现次数，必须 == 1（0 个会被打回，2 个也会被打回）。
+   辅助元素 opacity ≤ 0.7，同屏持续运动元素 ≤ 4、位移方向 ≤ 2。
 6. 禁止属性 data-start/data-duration/data-track-index（时序只归剪辑部）；禁止 repeat:-1；位移不得 ease:'none' 急停。
-7. 颜色只用给定 token（{{PRIMARY}} 等替换后的真实值），字体只用给定 fontFamily，字号用给定 px。
-8. 若给了相机与景别，用 MV.camera('.stage', { move, zoom }) 表达；静态画面必须有相机运动。
+7. 颜色只用给定 token 里的值，字体只用给定 fontFamily，字号用给定 px。
+8. 用 MV.camera('.stage', { move, zoom }) 表达运镜；move 只能取：${CAMERA_MOVES.join('/')}（拼错会静默失效）。
 9. 素材语言（payload.styleVisual）必须遵守：dimension=css3d 时至少用一个 3D 原语（MV.tilt3d/orbit/depth/card3d/spin3d），并给容器 perspective 与 transform-style:preserve-3d；dimension=2d 时禁止任何 3D 属性（perspective/rotate3d/translateZ）。motifs 是这一派允许的母题，texture 是允许的纹理层，styleVisual.note 是素材语言的一句话定义——场景必须长成这一派的样子，不能只换配色。`;
+}
 
 /** 导演批注系统提示词（docs/04 导演部）：一段一条，讲「这镜靠什么和旁白对位」 */
 const DIRECTOR_NOTES_SYSTEM_PROMPT = `你是视频编译器的导演部。根据讲稿每段旁白与类型配方的 beat 参考，为**每一段**写一条视觉批注。只输出合法 JSON 数组，数组长度必须等于输入 segments 长度，顺序一致。
@@ -126,11 +164,15 @@ const DIRECTOR_NOTES_SYSTEM_PROMPT = `你是视频编译器的导演部。根据
 对位纪律：hook 段用 emotion（放大情绪而不是解释）；机制/流程段用 evidence（画真的结构，不要比喻）；概念段用 metaphor（一个隐喻承载）；有反差点才用 parody。禁止全片同一个 counterpoint。`;
 
 /** 分镜系统提示词（docs/04 导演部 A5）：动机是「为什么切」，不是「这镜拍什么」 */
+export function buildStoryboardSystemPrompt(): string {
+  return STORYBOARD_SYSTEM_PROMPT;
+}
+
 const STORYBOARD_SYSTEM_PROMPT = `你是视频编译器的导演部（导演+分镜师）。根据讲稿段落与导演批注输出分镜数组。只输出合法 JSON 数组，每个元素是一镜。
 
 每镜字段：
 - segmentId / narration（必须原样使用该段旁白）/ visual（kind、prompt、template、params）
-- zoom：ELS|LS|MS|CU|ECU；camera：push-in|pull-out|pan|pan-left|tilt-up|tilt-down|static。
+- zoom：ELS|LS|MS|CU|ECU；camera：${[...CAMERA_MOVES, 'static', 'none'].join('|')}。
   **static 是合法选择**（定格 + 镜内表演，喜剧常用），不是漏填；但全片静止镜别超过 40%，
   运镜也别每镜同一式——镜头长短决定行程：短促节拍镜别给长推轨。
 - motivation：**切点动机**——只写「为什么从上一镜切到这一镜」，必须能归入下列之一：match-cut（同形接续）/ 动作接动作 / 视线接视线 / 情绪转场 / 节拍打点 / 景别跳。禁止写「静态呈现」「定场揭示」这类镜头内容描述；想不出理由就留空。

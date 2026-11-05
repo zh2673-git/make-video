@@ -50,18 +50,51 @@ export function topicTerms(topic: string): string[] {
 }
 
 /**
- * 主题二元组：中文没有空格分词，整句标题当单一词条会永远匹配不上。
- * 取 2 字滑窗做「主题指纹」——讲对了主题的稿子必然会命中相当比例的二元组。
+ * 主题实体（v1.1.2）：从标题里抽出「会被讲稿真的复述」的实词。
+ *
+ * 旧实现用 2 字滑窗做指纹，跨词边界会造出「线如」「何让」「为电」这种词——
+ * 中文标题里这些位置根本不构成词，讲稿再贴题也不可能写它们。实测
+ * "CPU流水线如何让你以为电脑很快" 的 15 个二元组里 8 个是跨界垃圾，
+ * 覆盖率上限被压到 53%，而判据卡在 30%：好稿子在 temperature 0.7 下随机翻转，
+ * 27% 被判跑题、打回重写。永远在临界点的门等于随机门。
+ *
+ * 现在按「中文停用词 + 虚词」切出实词块，只留长度 ≥2 的实体：
+ * CPU / 流水线 / 电脑 —— 这些才是讲稿会反复回到的锚点。
  */
-export function topicBigrams(topic: string): string[] {
-  const clean = topic.replace(/[\s，。、！？；：""''（）()《》…—\-.,!?;:'"]/g, '');
+const CN_STOPWORDS = [
+  '如何', '怎么', '怎样', '为什么', '是什么', '什么', '哪些', '哪个',
+  '让你', '让你以为', '你以为', '以为', '我们', '你们', '他们',
+  '可以', '能够', '到底', '究竟', '其实', '真的', '原来',
+  '的', '了', '是', '在', '和', '与', '就', '都', '也', '很',
+];
+
+export function topicEntities(topic: string): string[] {
+  let rest = topic.replace(/[\s，。、！？；：""''（）()《》…—\-.,!?;:'"]/g, '');
+  // 长停用词先切，避免「让你」被当成实体残留
+  for (const sw of [...CN_STOPWORDS].sort((a, b) => b.length - a.length)) {
+    rest = rest.split(sw).join('|');
+  }
   const out = new Set<string>();
-  for (let i = 0; i + 2 <= clean.length; i += 1) out.add(clean.slice(i, i + 2));
-  // 整段英文/数字 token（CPU、GPT4）本身也是强指纹
+  for (const chunk of rest.split('|')) {
+    const c = chunk.trim();
+    if (c.length < 2) continue;
+    // 「CPU流水线」这种「英文缩写紧跟中文实词」的粘块要拆开：
+    // 讲稿可能分别写 CPU 和 流水线，粘成一块会两边都匹配不上。
+    const parts = c.match(/[A-Za-z0-9]+|[\u4e00-\u9fff]{2,}/g) ?? [c];
+    for (const p of parts) if (p.length >= 2) out.add(p);
+  }
   for (const t of topicTerms(topic)) {
-    if (/^[A-Za-z0-9]+$/.test(t)) out.add(t.toLowerCase());
+    if (/^[A-Za-z0-9]+$/.test(t)) out.add(t);
   }
   return [...out];
+}
+
+/**
+ * 主题指纹（兼容旧调用）：返回实体列表。
+ * 保留这个名字是因为 index.ts 已导出；语义已从「二元组」改成正词实体。
+ */
+export function topicBigrams(topic: string): string[] {
+  return topicEntities(topic);
 }
 
 /**
@@ -124,25 +157,44 @@ export function validateScriptContent(script: Script, topic: string): Issue[] {
     );
   }
 
-  // V-SCP-013 主题落地：主题指纹（二元组）要在全片广泛命中，
-  // 只念一遍标题 = 通用叙事；真有内容必然反复回到主题词上。
-  const prints = topicBigrams(topic);
+  // V-SCP-013 主题落地：讲稿必须真的在讲这个主题。
+  //
+  // v1.1.2 校准：旧判据「二元组命中率 ≥30%」有两个错——
+  //   1) 二元组跨词边界（线如/何让/为电）根本不可能被贴题讲稿命中，覆盖率上限只有 53%；
+  //   2) 阈值卡在上限附近，好稿子实测 27%、坏稿子也可能 40%，门在随机翻转。
+  // 现在改用**实体**（CPU / 流水线 / 电脑），判据是「至少一半实体在讲稿里出现过」，
+  // 并对「只出现一次」的实体打 warn（念了标题就再没回来 = 没展开）。
+  const prints = topicEntities(topic);
   if (prints.length > 0) {
     const full = segs.map((s) => s.text).join('').toLowerCase();
-    const hit = prints.filter((b) => full.includes(b.toLowerCase()));
+    const counts = prints.map((b) => {
+      const re = new RegExp(b.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+      return { term: b, n: (full.match(re) ?? []).length };
+    });
+    const hit = counts.filter((c) => c.n > 0);
     const coverage = hit.length / prints.length;
-    // 判据分级：全片零命中 = 完全跑题；命中率 <30% = 只把标题念了一遍
     if (hit.length === 0) {
       issues.push(
-        err('V-SCP-013', `主题落地：全片没有任何主题指纹命中（${prints.slice(0, 6).join('/')}…）——讲稿跑题`),
+        err('V-SCP-013', `主题落地：全片没有任何主题实体命中（${prints.join('/')}）——讲稿跑题`),
       );
-    } else if (coverage < 0.3 && segs.length >= 6) {
+    } else if (coverage < 0.5 && segs.length >= 6) {
       issues.push(
         err(
           'V-SCP-013',
-          `主题落地：主题指纹仅命中 ${hit.length}/${prints.length}（${Math.round(coverage * 100)}%）——讲稿在写通用叙事而不是「${topic}」`,
+          `主题落地：主题实体仅命中 ${hit.length}/${prints.length}（${Math.round(coverage * 100)}%）——讲稿在写通用叙事而不是「${topic}」。缺：${counts.filter((c) => c.n === 0).map((c) => c.term).join('/')}`,
         ),
       );
+    } else {
+      // 只点一次名就不再回来：标题念过了，但内容没围绕它展开
+      const once = hit.filter((c) => c.n === 1).map((c) => c.term);
+      if (once.length > 0 && segs.length >= 10) {
+        issues.push(
+          warn(
+            'V-SCP-013',
+            `主题实体只出现一次：${once.join('/')}——像把标题念了一遍就转去通用叙事`,
+          ),
+        );
+      }
     }
   }
 

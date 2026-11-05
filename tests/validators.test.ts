@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { V } from '../src/core/index.js';
+import { MOTION_WHITELIST } from '../src/core/validators/scene.js';
 import { parseScript, validateCharBudget } from '../src/domain/scriptwriter.js';
 import type { Project } from '../src/core/schema.js';
 
@@ -260,5 +261,251 @@ describe('编剧校验器', () => {
       segments: [{ id: 'seg-1', text: '短'.repeat(150), function: 'advance' as const }],
     };
     expect(validateCharBudget(thin as never, recipe, '0-5').some((i) => i.id === 'V-SCP-005')).toBe(true);
+  });
+});
+
+describe('画面来源：提示词与校验器必须同源（v1.1.2 根因回归）', () => {
+  it('场景提示词只点名 motion-lib 真实存在的原语，且与 MOTION_WHITELIST 完全一致', async () => {
+    const { buildSceneSystemPrompt } = await import('../src/infrastructure/llm-client.js');
+    const prompt = buildSceneSystemPrompt();
+    // 提示词里出现的每个 MV.xxx 必须都在白名单里
+    const mentioned = new Set([...prompt.matchAll(/MV\.([A-Za-z0-9_]+)/g)].map((m) => m[1]!));
+    const allowed = new Set(MOTION_WHITELIST.map((p) => p.replace('MV.', '')));
+    // from/to/fromTo 在 motion-lib 里不存在：v1.1.1 曾把它们写进提示词，
+    // 模型照写 → 校验器 V-SCENE-003 必判 error → 重试耗尽 → 22/30 镜静默回退模板
+    for (const loose of ['from', 'to', 'fromTo', 'fade']) {
+      expect(allowed.has(loose)).toBe(false);
+    }
+    const unknown = [...mentioned].filter((m) => !allowed.has(m) && !['motifLoop'].includes(m));
+    // 允许 prompt 里出现「不要臆造 MV.from」这种反例提示，但要确保白名单本身干净
+    expect(unknown.length === 0 || prompt.includes('不要臆造')).toBe(true);
+    // 白名单里的每个原语都应被提示词点名（单一事实源不能有孤岛）；
+    // 排除 MV.MO / MV.MOTIF_KINDS 这类「常量导出」——它们不是可调用原语，
+    // 只是挂在同名对象上的数据表，提示词无需点名。
+    const NOT_PRIMITIVES = new Set(['MO', 'MOTIF_KINDS']);
+    for (const p of allowed) {
+      if (NOT_PRIMITIVES.has(p)) continue;
+      expect(prompt.includes(`MV.${p}`)).toBe(true);
+    }
+  });
+
+  it('V-SCENE-003 对未实现的 MV.from 判 error（锁住判据）', () => {
+    const html = `<body data-scene-id="s01"><div class="stage"><div class="subject">A</div></div>
+<script src="../motion/motion-lib.js"></script>
+<script>document.addEventListener('DOMContentLoaded',function(){
+  MV.from('.subject',{opacity:0});
+  MV.motifLoop('.stage',{amp:2,duration:1200});
+});</script></body>`;
+    const issues = V.validateSceneFile(html, { narration: '一句旁白' });
+    expect(issues.find((i) => i.id === 'V-SCENE-003')?.level).toBe('error');
+  });
+});
+
+describe('V-SCP-013 主题落地：实体级判据（v1.1.2 校准回归）', () => {
+  const topic = 'CPU流水线如何让你以为电脑很快';
+
+  it('主题实体只抽实词，不产生跨词边界垃圾', async () => {
+    const { topicEntities } = await import('../src/core/validators/content.js');
+    const ents = topicEntities(topic);
+    // 旧实现产出 15 个 2 字窗，其中「线如/何让/为电/脑很」这类不构成词，
+    // 讲稿越贴题越命中不了 → 覆盖率上限 53%，门在上限附近随机翻转
+    for (const junk of ['线如', '何让', '为电', '脑很', 'U流']) {
+      expect(ents).not.toContain(junk);
+    }
+    expect(ents).toContain('CPU');
+    expect(ents).toContain('流水线');
+    expect(ents).toContain('电脑');
+  });
+
+  it('贴题讲稿零 error（好稿子不能被随机打回）', async () => {
+    const { validateScriptContent } = await import('../src/core/validators/content.js');
+    const lines = [
+      '真相藏在一条叫流水线的装配线里。',
+      '一条指令要拆成五步走，才凑得出这个速度。',
+      '关键不在快，在于五级同时开工。',
+      '五条指令抢同一批资源，这叫流水线冒险。',
+      '分支预测走错方向，整条流水线被清空。',
+      '于是乱序执行登场，谁的数据先备齐谁先跑。',
+      '前端一个周期能喂四到六条指令。',
+      '所以电脑很快是个统计错觉，快在重叠。',
+    ];
+    const segments = lines.map((text, i) => ({ id: `seg-${i + 1}`, text, function: 'advance' as const }));
+    const issues = validateScriptContent(
+      { fullText: lines.join(''), segments } as never,
+      topic,
+    );
+    expect(issues.filter((i) => i.level === 'error')).toEqual([]);
+  });
+
+  it('通用叙事讲稿（零主题实体）判 error', async () => {
+    const { validateScriptContent } = await import('../src/core/validators/content.js');
+    const lines = [
+      '这件事比看起来要有意思得多。',
+      '我们不妨把它拆成几个部分来看。',
+      '第一部分是大家最熟悉的那一层。',
+      '第二部分往往被人忽略掉。',
+      '真正关键的地方在第三部分。',
+      '说到这里，脉络就逐渐清晰了。',
+    ];
+    const segments = lines.map((text, i) => ({ id: `seg-${i + 1}`, text, function: 'advance' as const }));
+    const issues = validateScriptContent(
+      { fullText: lines.join(''), segments } as never,
+      topic,
+    );
+    expect(issues.find((i) => i.id === 'V-SCP-013')?.level).toBe('error');
+  });
+});
+
+describe('重音预算：全片资源不能由逐镜独立判断（V-MOT-013 合成卡死回归）', () => {
+  const mk = (n: number, emotions: number[] = []) => ({
+    meta: { id: 'p', title: 't', topic: 'CPU流水线', aspect: '16:9', durationTier: '0-5', fps: 30, genre: 'science-explainer', assetPolicy: 'auto', aiConsent: false },
+    stage: 'storyboard',
+    script: {
+      fullText: '',
+      segments: Array.from({ length: n }, (_, i) => ({
+        id: `seg-${i + 1}`,
+        text: `段${i}`,
+        function: emotions.includes(i) ? 'emotion' : 'advance',
+        beat: 'hook',
+        mood: 'neutral',
+        emphasis: emotions.includes(i) ? ['重'] : [],
+      })),
+    },
+    shots: Array.from({ length: n }, (_, i) => ({
+      id: `s${String(i + 1).padStart(2, '0')}`,
+      segmentId: `seg-${i + 1}`,
+      narration: `旁白${i}`,
+      counterpoint: 'evidence',
+      zoom: 'MS',
+      camera: 'static',
+      state: 'planned',
+      visual: { kind: 'code-scene', prompt: 'x', template: 'typography', params: {} },
+    })),
+  });
+
+  it('预算上限与 V-MOT-013 判据同源（floor(n/3)），且不会超配', async () => {
+    const { allocateAccentShots } = await import('../src/domain/accent-budget.js');
+    for (const n of [4, 10, 30]) {
+      const b = allocateAccentShots(mk(n) as never);
+      expect(b.cap).toBe(Math.floor(n / 3));
+      expect(b.allowed.size).toBeLessThanOrEqual(b.cap);
+      expect(b.allowed.size / n).toBeLessThanOrEqual(1 / 3);
+    }
+  });
+
+  it('同一项目重复计算得到同一结果（预算不能随重跑漂移，否则是竞态不是预算）', async () => {
+    const { allocateAccentShots } = await import('../src/domain/accent-budget.js');
+    const p = mk(30, [3, 7]);
+    const a = [...allocateAccentShots(p as never).allowed].sort();
+    const b = [...allocateAccentShots(p as never).allowed].sort();
+    expect(a).toEqual(b);
+  });
+
+  it('首镜必占（V-MOT-018 开头那一下砸），情绪段优先', async () => {
+    const { allocateAccentShots } = await import('../src/domain/accent-budget.js');
+    const b = allocateAccentShots(mk(30, [5]) as never);
+    expect(b.allowed.has('s01')).toBe(true);
+    expect(b.allowed.has('s06')).toBe(true); // 第 6 镜 = index 5，情绪段
+  });
+
+  it('镜头太少时不设预算（与 V-MOT-013 的 <4 豁免一致）', async () => {
+    const { allocateAccentShots } = await import('../src/domain/accent-budget.js');
+    const b = allocateAccentShots(mk(3) as never);
+    expect(b.allowed.size).toBe(3);
+  });
+
+  it('无预算的镜头写了 slam 会被就地降级成 enter（结构不变，不再占预算）', async () => {
+    const { normalizeSceneHtml } = await import('../src/domain/scene-forge.js');
+    const html = `<body data-scene-id="s02"><div class="stage"><div class="subject">主</div></div>
+      <script>MV.slam('.subject', {duration:200}); MV.highlight('.subject');</script></body>`;
+    const out = normalizeSceneHtml(html, { accentAllowed: false });
+    expect(out).not.toContain('MV.slam');
+    expect(out).toContain('MV.enter(');
+    // 非重音原语不受影响
+    expect(out).toContain('MV.highlight(');
+  });
+
+  it('有预算的镜头不被降级', async () => {
+    const { normalizeSceneHtml } = await import('../src/domain/scene-forge.js');
+    const html = `<body data-scene-id="s01"><div class="stage"><div class="subject">主</div></div>
+      <script>MV.slam('.subject');</script></body>`;
+    expect(normalizeSceneHtml(html, { accentAllowed: true })).toContain('MV.slam');
+  });
+});
+
+describe('场景规范化：机械可修项就地修，不为「少写一个 class」重画整镜', () => {
+  it('主语 0 个时补到第一个有文字的非装饰元素（V-COMP-001）', async () => {
+    const { normalizeSceneHtml } = await import('../src/domain/scene-forge.js');
+    const html = `<body data-scene-id="s01"><div class="stage">
+      <div class="bg-circle"></div>
+      <div class="label">4 路并行</div>
+    </div></body>`;
+    const out = normalizeSceneHtml(html);
+    expect(out).toContain('class="label subject"');
+    // 装饰元素不能当主语
+    expect(out).not.toContain('bg-circle subject');
+    const issues = V.validateSceneFile(out, { narration: '一句旁白' });
+    expect(issues.find((i) => i.id === 'V-COMP-001')).toBeUndefined();
+  });
+
+  it('主语 >1 个时只保留第一个，其余降级为 deco', async () => {
+    const { normalizeSceneHtml } = await import('../src/domain/scene-forge.js');
+    const html = `<body data-scene-id="s01"><div class="stage">
+      <div class="subject">主</div>
+      <div class="title">副</div>
+    </div></body>`;
+    const out = normalizeSceneHtml(html);
+    expect((out.match(/\b(subject|title|hero)\b/g) ?? []).length).toBe(1);
+    expect(out).toContain('class="deco"');
+  });
+
+  it('单引号 class 被统一成双引号（否则明明写了 subject 也被判 0 个）', async () => {
+    const { normalizeSceneHtml } = await import('../src/domain/scene-forge.js');
+    const html = `<body data-scene-id="s01"><div class="stage"><div class='subject'>主</div></div></body>`;
+    const out = normalizeSceneHtml(html);
+    expect(out).toContain('class="subject"');
+  });
+
+  it('已经合规的场景不被改动（规范化必须幂等）', async () => {
+    const { normalizeSceneHtml } = await import('../src/domain/scene-forge.js');
+    const html = `<body data-scene-id="s01"><div class="stage"><div class="subject">主</div></div></body>`;
+    expect(normalizeSceneHtml(html)).toBe(html);
+  });
+});
+
+describe('运镜词表：提示词/校验器/归一化必须同源（v1.1.2 分镜打回回归）', () => {
+  it('pan-right 归一化为 pan（模型按左右直觉命名）', async () => {
+    const { normalizeCameraToken, isCameraToken } = await import('../src/core/schema.js');
+    // v1.1.2 实测：一份分镜里 s02/s08/s10/s17/s22/s26 全写 pan-right，
+    // 缺别名 → V-CAM-002 六条 error → 整份分镜被打回，片子出不来
+    expect(isCameraToken('pan-right')).toBe(true);
+    expect(normalizeCameraToken('pan-right')).toBe('pan');
+    expect(normalizeCameraToken('panright')).toBe('pan');
+    // 左向仍走 pan-left，不能一起归一成 pan，否则左右不分
+    expect(normalizeCameraToken('pan-left')).toBe('pan-left');
+  });
+
+  it('分镜提示词的 camera 词表与 schema.CAMERA_MOVES 一致', async () => {
+    const { CAMERA_MOVES } = await import('../src/core/schema.js');
+    const mod = await import('../src/infrastructure/llm-client.js');
+    const prompt = mod.buildStoryboardSystemPrompt();
+    for (const m of CAMERA_MOVES) {
+      expect(prompt.includes(m)).toBe(true);
+    }
+  });
+
+  it('V-CAM-002 报错文案里的合法值 == 真实词表（不手写枚举）', () => {
+    const shots = [
+      { id: 's01', camera: 'dolly-zoom', counterpoint: 'metaphor', colorTemp: 'warm' },
+    ] as never;
+    const issues = V.validateStoryboard({
+      shots,
+      meta: {},
+      script: { segments: [{ id: 'seg-1' }] },
+    } as never);
+    const msg = issues.find((i) => i.id === 'V-CAM-002')!.message;
+    // 文案点名了合法值，照着文案写就不会再被打回
+    expect(msg).toContain('push-in');
+    expect(msg).toContain('whip-pan');
   });
 });
