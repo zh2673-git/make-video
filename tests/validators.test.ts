@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { V } from '../src/core/index.js';
-import { parseScript } from '../src/domain/scriptwriter.js';
+import { parseScript, validateCharBudget } from '../src/domain/scriptwriter.js';
 import type { Project } from '../src/core/schema.js';
 
 describe('V-STYLE-003 组合确认门', () => {
@@ -151,9 +151,114 @@ describe('剪辑节奏校验器', () => {
   });
 });
 
+// v1.1.0 事故复现：8 句套话按 i % 8 轮转填满 30 段、画面按 8 模板循环 3.75 遍，
+// 当时所有形式校验全绿。以下用例锁死「内容空转必须被拦」。
+describe('内容门（v1.1.1）', () => {
+  const mkShot = (id: string, narration: string, template = 'typography') =>
+    ({ id, narration, segmentId: id, visual: { kind: 'code-scene', template, params: {} }, state: 'ready' } as never);
+
+  it('V-SCP-011 台词重复：8 句循环填 30 段判 error', () => {
+    const pool = Array.from({ length: 8 }, (_, i) => `第 ${i + 1} 句套话。`);
+    const segments = Array.from({ length: 30 }, (_, i) => ({
+      id: `seg-${i + 1}`,
+      text: pool[i % 8]!,
+      function: 'advance' as const,
+    }));
+    const issues = V.validateScriptContent({ fullText: '', segments } as never, 'CPU 流水线');
+    expect(issues.find((i) => i.id === 'V-SCP-011')?.level).toBe('error');
+  });
+
+  it('V-SCP-012 套话黑名单：可套任意主题的空话命中 ≥2 段判 error', () => {
+    const segments = [
+      { id: 'seg-1', text: '把镜头拉近，看看这条流水线。', function: 'advance' as const },
+      { id: 'seg-2', text: '回到最初的问题：它为什么快？', function: 'advance' as const },
+      { id: 'seg-3', text: '取指阶段每秒搬运 4 条指令。', function: 'advance' as const },
+    ];
+    const issues = V.validateScriptContent({ fullText: '', segments } as never, 'CPU 流水线');
+    expect(issues.find((i) => i.id === 'V-SCP-012')?.level).toBe('error');
+  });
+
+  it('V-SCP-013 主题落地：写通用叙事不写主题判 error', () => {
+    const segments = Array.from({ length: 6 }, (_, i) => ({
+      id: `seg-${i + 1}`,
+      text: `这是第 ${i + 1} 个通用的观察，和它背后的故事。`,
+      function: 'advance' as const,
+    }));
+    const issues = V.validateScriptContent({ fullText: '', segments } as never, 'CPU 流水线');
+    expect(issues.some((i) => i.id === 'V-SCP-013' && i.level === 'error')).toBe(true);
+  });
+
+  it('V-SCP-015 离线占位标记直接判 error（硬闸）', () => {
+    const segments = [
+      { id: 'seg-1', text: '【离线占位】第 1 段待 LLM 填写：CPU 流水线', function: 'advance' as const },
+      { id: 'seg-2', text: '【离线占位】第 2 段待 LLM 填写：CPU 流水线', function: 'advance' as const },
+    ];
+    const issues = V.validateScriptContent({ fullText: '', segments } as never, 'CPU 流水线');
+    expect(issues.find((i) => i.id === 'V-SCP-015')?.level).toBe('error');
+  });
+
+  it('真有内容的讲稿零 error（门不能误伤正常稿）', () => {
+    const lines = [
+      '主频 4GHz 不等于每秒执行四十亿条指令。',
+      '流水线把一条指令拆成取指、译码、执行、访存、写回五级。',
+      '数据冒险时后一条指令要等前一条写回。',
+      '转发技术绕过寄存器直接传结果，省下两个周期。',
+      '分支预测猜错要清空流水线，损失十几个周期。',
+      '所以电脑很快，一半是流水线替你藏起来的错觉。',
+    ];
+    const segments = lines.map((text, i) => ({ id: `seg-${i + 1}`, text, function: 'advance' as const }));
+    const issues = V.validateScriptContent({ fullText: lines.join(''), segments } as never, '流水线');
+    expect(issues.filter((i) => i.level === 'error')).toEqual([]);
+  });
+
+  it('V-RHY-012 画面形态周期重复：8 模板循环 3.75 遍判 error', () => {
+    const forms = Array.from({ length: 8 }, (_, i) => `tpl-${i}`);
+    const shots = Array.from({ length: 30 }, (_, i) => mkShot(`s${i + 1}`, `第 ${i + 1} 句旁白。`, forms[i % 8]!));
+    const issues = V.validateRhythmPeriodicity({ shots } as never);
+    expect(issues.find((i) => i.id === 'V-RHY-012')?.level).toBe('error');
+  });
+
+  it('V-RHY-012 全片单一形态判 error', () => {
+    const shots = Array.from({ length: 10 }, (_, i) => mkShot(`s${i + 1}`, `第 ${i + 1} 句旁白。`));
+    const issues = V.validateRhythmPeriodicity({ shots } as never);
+    expect(issues.some((i) => i.id === 'V-RHY-012')).toBe(true);
+  });
+
+  it('V-RHY-012 形态多样且无周期时放行', () => {
+    const forms = ['paper-stage', 'flow', 'chart', 'comparison', 'process-track', 'kinetic-type', 'atmosphere'];
+    const shots = Array.from({ length: 14 }, (_, i) => mkShot(`s${i + 1}`, `第 ${i + 1} 句不同的旁白内容。`, forms[i % forms.length]!));
+    expect(V.validateRhythmPeriodicity({ shots } as never)).toEqual([]);
+  });
+});
+
 describe('编剧校验器', () => {
   it('parseScript 缺功能直接报错（V-SCP-001 不被默认值架空）', () => {
     const raw = { fullText: '文本', segments: [{ id: 'seg-1', text: '无功能段' }] };
     expect(() => parseScript(raw)).toThrow(/V-SCP-001|未标功能/);
+  });
+
+  // V-SCP-005 字数口径：中文按字算（60000/MS_PER_CHAR_CN ≈ 273 字/分），不是英文 wordsPerMin。
+  // 旧口径把 2.5 分钟档目标定成 325 字，正常中文讲稿（~680 字）全被判「偏离」——警告变噪音。
+  it('V-SCP-005 中文正常字数不告警（按字/durationTier 推导，不按 wordsPerMin）', () => {
+    const recipe = {
+      durationTiers: { '0-5': { wordsPerMin: 130, structure: 'x', chapters: 2 } },
+    } as never;
+    // 2.5min × 60000ms / 220ms ≈ 682 字，取 660 字（-3%）应落在 ±20% 内
+    const text = '流'.repeat(22);
+    const script = {
+      fullText: '',
+      segments: Array.from({ length: 30 }, (_, i) => ({
+        id: `seg-${i + 1}`,
+        text,
+        function: 'advance' as const,
+      })),
+    };
+    expect(validateCharBudget(script as never, recipe, '0-5')).toEqual([]);
+    // 明显过短（150 字）仍要告警，门没被放松成永不触发
+    const thin = {
+      fullText: '',
+      segments: [{ id: 'seg-1', text: '短'.repeat(150), function: 'advance' as const }],
+    };
+    expect(validateCharBudget(thin as never, recipe, '0-5').some((i) => i.id === 'V-SCP-005')).toBe(true);
   });
 });
