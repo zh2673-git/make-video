@@ -15,6 +15,7 @@ import { TEMPLATES_DIR } from '../core/constants.js';
 import type { ProjectStore } from '../infrastructure/project-store.js';
 import { atomicWriteText, copyFile, ensureDir, exists } from '../infrastructure/fs-utils.js';
 import { extractKeywords } from '../core/validators/scene.js';
+import { MAIN_ACTION_PRIMITIVES } from '../core/catalog.js';
 import { copyDir } from './composer-utils.js';
 import { escapeHtml, normalizeSceneHtml } from './scene-forge.js';
 import { accentAllowedFor } from './accent-budget.js';
@@ -50,6 +51,16 @@ const MOTIF_AMP_TO_PX = 6;
 /** pulse/breathe/rotate 类：缩放母题按「400px 元素上的边移」折算，amp/8 × 400 */
 const MOTIF_SCALE_BASE_PX = 400;
 const MOTIF_SCALE_KINDS = new Set(['pulse', 'breathe', 'compress', 'settle', 'drain', 'rotate', 'shimmer', 'scan', 'sweep']);
+
+/**
+ * 「这一镜有没有主动作」的判据：主动作原语名单由 core/catalog.js 统一给出。
+ * 以前这里手写正则枚举了 18 个原语，等于第三份手写清单——白名单加了 drift 之后
+ * 它没跟上，于是纯 drift 的氛围镜被判「无主动作」。现在名单只在一处维护。
+ */
+const MAIN_ACTION_RE = new RegExp(
+  `MV\\.(?:${MAIN_ACTION_PRIMITIVES.map((p) => p.slice(3)).join('|')})\\(`,
+);
+
 
 /**
  * 从场景 HTML 抽出 motifLoop 调用 → 母题种类 + 最小可见位移（V-MOT-022 素材）。
@@ -447,9 +458,7 @@ export async function compose(
     const accentOff = /data-accent="0"/.test(html);
     sceneFacts.set(shot.id, {
       accents: accentOff ? [] : V.ACCENT_PRIMITIVES.filter((p) => html.includes(p)),
-      hasMain: /MV\.(enter|slam|staggeredIn|morphTo|counter|highlight|cards|punch|whip|maskReveal|bands|performance|emphasis|orbit|depth|tilt3d|spin3d|card3d)\(/.test(
-        html,
-      ),
+      hasMain: MAIN_ACTION_RE.test(html),
       textLed:
         ((shot.visual.params['actionSheet'] as { grammar?: string } | undefined)?.grammar ?? '').startsWith('y5') ||
         /class="[^"]*\b(kinetic|kinetic-type)\b/.test(html),

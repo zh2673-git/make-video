@@ -370,4 +370,150 @@
 
 ### 执行记录（2026-11-05）
 
-（实施后追加）
+- 原语 12 个（motion-lib.js）+ 运镜词 3 个（punch-in/whip-pan/drift）+ 语法层 9 种（motion-grammar.ts）
+  + 富编排模板 3 个（kinetic-type/paper-stage/deep-stage）+ V-MOT-013~021 已全部落地；
+  `npx vitest run` 110/110 绿（含 motif-liveness 回归测试）。
+- 遗留（转入 P8）：语法选型在 compose 期才执行（分镜不知语法）；actionSheet 落盘后无约束力；
+  模板原语覆盖不均（atmosphere/comparison 仅 4 种原语）；V-MOT-019 对真素材镜误报；
+  Qwen3-TTS worker 无空闲超时（挂机占 GPU）。
+
+## P8 丰富度收口：语法前移 + 模板增补 + 母题可见度 + GPU 治理（2026-11-06）
+
+> 承接 P7 遗留。目标：让「动效由语义决定」从 compose 期的记录行为变成 storyboard 期的决策行为，
+> 模板层补齐对比/流程/层级三类语义的富编排形式，母题循环从「有调用」升级为「看得见」，
+> 并根治 Qwen3-TTS worker 挂机占 GPU 的工程缺陷。
+
+### 逆向证据（2026-11-06 复核）
+
+1. `composer.ts:409-424`：pickGrammar 在 compose 期才执行——分镜/场景生成都不知道语法，
+   actionSheet 写进 `visual.params` 后无人读，是「记录」不是「决策」。
+2. 模板×原语矩阵（12 模板实测）：atmosphere=4 种、comparison=4 种、typography/talking-head=4 种；
+   kinetic-type/paper-stage/deep-stage=7-10 种。「素」的根因是旧 9 模板只有 enter+idle+motifLoop。
+3. V-MOT-019 误报根因（`composer.ts:52-71` toMotionFact）：`hasMain: f.hasMain`，真素材镜
+   （user-material，无 Scene HTML）恒 false → 每个真素材镜都被记一次「无主动作」。
+4. GPU 治理：`qwen3_tts_worker.py` 无空闲退出、父死不退；`Qwen3TtsClient` 无 close()；
+   CLI run/voice 收尾不释放。挂机 voice-multi.mjs 留下 worker 常驻占 GPU（实测 8188MiB 独占）。
+5. 动作谱没有约束力：LLM 场景校验（validateSceneFile）不读 actionSheet，
+   语法要求的原语（如 y5 的 slam）缺席也放行。
+
+### 任务书（T0-T6）
+
+- **T0 GPU 治理**：worker 加空闲超时（默认 300s，可 `MV_QWEN3_IDLE_EXIT` 覆盖）+ 父进程死亡即退
+  （stdin EOF 检测）；`TtsClient` 接口加可选 `close()`，`Qwen3TtsClient` 实现之；
+  `StateEngine.destroy()` 释放 tts；CLI run/voice 与 voice-multi/voice-all 收尾调用。
+  合理性说明：跨 4 文件约 70 行，原因是「进程生命周期」天然贯穿 worker/client/engine/cli 四层，
+  拆开改任何一层都无法根治僵尸进程。
+- **T1 模板增补**：新增 `compare-stage`（对比：两栏对峙+中线划过+胜负翻转）、
+  `process-track`（流程：站点轨道+游标推进+站点点亮）、`hierarchy-stack`（层级：堆叠卡+抽层+俯瞰）；
+  paper-stage/deep-stage 增加第二编舞变体（treatment 参数区分，不复制文件）；
+  接入 recipe 池（product-promo/opinion-essay/science-explainer/story-narrative/tutorial-howto/news-brief）。
+- **T2 语法前移**：新增 y6_mechanism（机制拆解：部件逐个点亮+力传导）/ y7_system_map（系统地图：
+  全貌定场+局部放大+回望全图）两种语法；storyboard 期调 pickGrammar 写入 actionSheet（composer 只沿用不重算）；
+  TEMPLATE_CUES 的富模板条目挂语法归位（模板选择与语法选型共享语义线索）。
+- **T3 V-MOT-022 母题可见度**：motifLoop 的 amp 折算位移/缩放必须 ≥ 可见阈值（float≥3px、
+  pulse≥5%），单镜母题种类 ≥1；低于阈值记 warn（渲染实测「动 1-2px 等于没动」的教训）。
+- **T4 hasMainAction 口径**：真素材镜（user-material/imported）+ camera≠none → 有主动作
+  （Ken Burns 本身就是运动语义）；b_roll 语法镜豁免「无主动作」告警。
+- **T5 actionSheet 变约束**：actionSheet 增加 `requiredPrimitives`（语法→必选原语映射）；
+  scene-forge 校验场景 HTML 必须包含必选原语（error 级），LLM 生成时 payload 带上动作谱。
+- **T6 文字主导闸+超长镜切分**：storyboard 后统计 y5 金句镜占比 >40% 时把后续候选改判其它语法；
+  旁白估时 >8s 的镜在分镜期拆为两镜（沿用既有 coverage 机制，不新增字段）。
+
+### 验收（P/Q/I）
+
+- **P**：基线 110/110 绿（2026-11-06 实测）。
+- **Q**：新增测试覆盖 y6/y7 选型、V-MOT-022 阈值、T4 口径、T5 约束、worker 超时参数解析；
+  check-templates.ts 升级为模板×原语覆盖矩阵（每模板 ≥6 种原语或显式豁免）；全量 vitest 绿。
+- **I**：schema 零新增必填字段（actionSheet.requiredPrimitives 为可选）；既有 110 测试不回归；
+  CLI 契约不变；worker 超时退出不影响正常批量合成（合成中不超时）。
+
+### 执行记录（2026-11-06）
+
+全部落地，`npx vitest run` **124/124 绿**（基线 110 + 新增 14）。逐项：
+
+- **T0 GPU 治理 ✓**：`qwen3_tts_worker.py` 加空闲超时（`MV_QWEN3_IDLE_EXIT` 秒，默认 300，
+  每次请求重置计时器；空闲退出打 `idle-exit` 日志行）+ 父死即退（stdin EOF 自然退出）；
+  `TtsClient` 接口加可选 `close()`，`Qwen3TtsClient.close()` 关 stdin→3s 优雅窗口→kill 兜底；
+  `StateEngine.destroy()` 释放 tts；CLI `run` 收尾 `engine.destroy()`、`voice` 收尾 `tts.close()`（finally）；
+  `voice-multi.mjs`/`voice-all.mjs` 收尾释放。冒烟：close 幂等（未启动 worker 时为空操作）。
+- **T2 语法前移 ✓**：`GRAMMARS` 增至 11 种（y6_mechanism/y7_system_map）；
+  `storyboard()` 在分镜期调 `pickGrammar` + `actionSheet` 写入 `visual.params`；
+  `compose()` 只沿用既有 actionSheet（老项目无谱才补算）——确认点的人工改判不再被覆盖。
+- **T3 V-MOT-022 ✓**：`composer.extractMotifFacts` 从场景 HTML 数 motifLoop 的 kind/amp
+  （位移类 ×6px、缩放类按 400px 元素 ×amp/8，与 motion-lib 定价公式同口径）；
+  `auditMotionMix` 新增两判：动幅 <3px warn、过半镜无母题 warn。
+- **T4 hasMainAction 口径 ✓**：`toMotionFact` 改为 `hasMain ||（真素材镜 && camera≠none）|| grammar==='b_roll'`——
+  真素材镜（无 Scene HTML 的采集盲区）与氛围兜底镜不再误报「无主动作」。
+- **T5 动作谱变约束 ✓**：`ActionSheet.requiredPrimitives`（`REQUIRED_BY_GRAMMAR` 表，全语法必含 motifLoop）；
+  LLM 场景 payload 带全谱，`tryLlmScene` 校验走 V-MOT-023（缺原语即打回重试）。
+  实施修订：forge 模板路径**豁免** V-MOT-023——端到端实测模板选型（TEMPLATE_CUES）与语法选型
+  （pickGrammar）是两条链，硬套会把整条流水线打回（28 镜全 failed 的教训）；模板编舞已由 V-MOT-021 把关。
+- **T6 文字主导闸 + 超长镜切分 ✓**：`suppressTextLed`（前文 y5 >40% 且 ≥3 镜后硬排除 y5）；
+  分镜期拆 >36 字（≈8s）且 ≥2 句的镜为 a/b 两镜，后半镜景别进一档（`ZOOM_LADDER` 七档全阶梯）；
+  V-RHY-007 口径同步为「每个 segmentId 至少一镜覆盖」。
+- **T1 模板增补 ✓**：新增 `compare-stage`（中线划下+胜负翻转+counter 落定，8 原语）、
+  `process-track`（轨道描线+游标 drift 推进+站点点亮，9 原语）、
+  `hierarchy-stack`（3D 卡叠+逐层点亮+顶卡接管，9 原语）；8 个 recipe 池接入（2→10 个模板）；
+  TEMPLATE_CUES 增三组窄线索（与 y6/y7 语法同源）。
+- **check-templates 矩阵 ✓**：哑值校验 + 原语覆盖矩阵（≥6 原语，7 个内容中性/被替代语义位模板豁免）
+  + motifLoop amp 可见性预检；15 模板全 OK。
+- **验证 ✓**：`npx tsc --noEmit` 干净；`npx vitest run` 124/124（新增 tests/p8-enrichment.test.ts 6 项
+  + motion-grammar 8 项）；模板矩阵全绿；端到端调试脚本验证 template 模式管线到 render。
+- **docs/10 登记 ✓**：V-MOT-022/023 入表、语法表 9→11、语法前移与超长镜切分条款。
+
+### 实战案例验证（2026-11-06，CPU 流水线 122s）
+
+`science-explainer / code-first` 真实管线走通：30 镜全 voiced（Qwen3 TTS）、hyperframes
+1080p 渲染 122.37s 成片、stage=done、motion-audit 0 warn 0 error、cut/camera 审计过闸。
+语法分布实测：y5_kinetic_type×12、b_roll×7、y2_collage×4、y1_flat_explainer×4、
+**y7_system_map×3（新语法进真实选型）**。成片：`outputs/make-video-cases/cpu流水线-P8案例.mp4`。
+
+**实战揪出一个 P8 之外的真缺陷并已修复**：LLM 场景把 SCENE_SYSTEM_PROMPT 的教学注释
+原样抄进 HTML（`querySelector('[data-composition-id]')` 字样出现在注释/选择器里），
+`wrapComposition` 的裸 `includes('data-composition-id')` 防重判断被骗过 → 跳过合成根注入
+→ hyperframes 编译 26 镜全灭（`no element with a data-composition-id attribute`）。
+修复（composer.ts wrapComposition）：防重判断改认**属性/赋值形态**
+（`/(<|\s)data-composition-id\s*=["']/`、`/window\.__timelines\s*=/`、`/<[^>]*mv-presenter/`），
+注释与选择器文本不再误命中；单测 + 全量 124/124 复绿后复渲染成功。
+教训：**防重判断永远不要用裸 includes——只认语义形态**。
+
+## 2026-02-15 优化落点地图 + 能力清单收口（v1.2.0）
+
+**用户诉求**：要一张「优化收益地图」——不同改动（动效/语法/模板/风格/词表）各自带来什么收益、
+该在哪个文件改，以便日后遇到优秀参考项目时能直接判定「改这里有用、改那里没用」。
+
+**审计发现的四处真实漂移**（都不是 bug，是"三份手写清单互相对不上"）：
+
+1. `composer.ts` 的 `hasMain` 手写正则枚举 18 个原语，白名单加 `drift` 后未跟上
+   → 纯 drift 的氛围镜被判「无主动作」（第三份手写清单）。
+2. `REQUIRED_BY_GRAMMAR` / `settleByGrammar` 缺项用 `?? 默认值` 静默兜底
+   → 新增语法漏登记会得到「只有 motifLoop」的最松骨架且无人知晓。
+3. SKILL.md 风格菜单 16 条，`styles/` 实际只有 9 个包 → 10/16 条不可用，
+   照菜单点名直接 `STYLE_UNKNOWN`；且 `cyber-neon` 实际 id 是 `neon-tech-cinematic`，
+   真实存在的 `bright-paper`/`cinematic-dark` 菜单未收录。
+4. 计数漂移：SKILL.md「九种语法」（实为 11）、「12 个动效原语」（实为 26）；
+   README.md 同处更严重——「9 种语法」列的 9 个名字（kinetic-type/collage/…）
+   全是虚构的，与 `GRAMMARS` 真实 id（y1–y7/t1–t3/b_roll）毫无对应。
+
+**结论（收益排序被修正）**：`V-MOT-023` 只在 LLM 施工路径强制（`enforceActionSheet`
+仅 `drawScene` 传入，`adoptScene` 不传），所以「扩语法骨架」对主力路径 P-agent 基本无效。
+真实性价比：L3 风格包 visuals > L5 预算判据 > L1 原语 > L2 语法 > L4 模板文件（只救兜底）。
+
+**落地**：
+- 新增 `src/core/catalog.ts`：`NON_ACTION_PRIMITIVES`（7 个）/ `MAIN_ACTION_PRIMITIVES`
+  （白名单派生）/ `GRAMMAR_IDS` / `buildCapability()`。`drift` 归主动作（刻意的匀速慢移，
+  与 `static/none` 的真静止不同）。
+- `composer.ts` `hasMain` 改为 `MAIN_ACTION_RE` 从 `MAIN_ACTION_PRIMITIVES` 派生，消掉第三份清单。
+- `motion-grammar.ts`：`REQUIRED_BY_GRAMMAR`/`SETTLE_BY_GRAMMAR` 导出，缺项改 `console.warn`
+  显式告警（同项只报一次，不阻断出片）。
+- 新增 `make-video capability [--json]`：能力清单唯一入口。
+- 新增 `docs/13-优化落点地图.md`：六层落点 × 三条路径收益矩阵 / 5 问判定树 / 各层改动清单。
+- 新增 `tests/catalog.test.ts` 14 条防腐断言（①白名单↔motion-lib 双向 ②语法↔骨架收势
+  ③文档计数↔实际 ④机位词↔if 分支）。**断言当场抓出 3 处文档虚标**，改完后全绿。
+- 文档纠偏：SKILL.md 菜单改 9 个真实包 + 规划项单列；语法 11、原语 26；
+  README.md 语法名改真实 id。
+- 另修：`cli.ts` 的 `program.version('0.1.0')` 陈旧 → `1.2.0`（`--version` 一直报错版本）。
+
+**验证**：`npx tsc --noEmit` 干净；`vitest run` 全量 14 文件 / 165 条全绿（基线 13 文件 / 151 条，
+新增 14 条），端到端 pipeline 3 条不回归。
+

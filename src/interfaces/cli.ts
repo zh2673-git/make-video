@@ -19,6 +19,7 @@ import {
   useRecording,
 } from '../application/pipeline.js';
 import { buildConfirmation } from '../domain/storyboard.js';
+import { buildCapability } from '../core/catalog.js';
 import { V } from '../core/index.js';
 import { mvError } from '../core/errors.js';
 import type { Genre } from '../core/constants.js';
@@ -65,7 +66,58 @@ async function loadRegistry(registry: StyleRegistry): Promise<void> {
 }
 
 const program = new Command();
-program.name('make-video').description('代码绘制优先的视频编译器').version('0.1.0');
+program.name('make-video').description('代码绘制优先的视频编译器').version('1.2.0');
+
+program
+  .command('capability')
+  .description('能力清单：动效原语/语法/机位/风格包/模板/配方 的实际数量与名单（优化前先看这个）')
+  .option('--json', '输出完整 JSON（默认给摘要）')
+  .action(async (opts: { json?: boolean }) => {
+    try {
+      const cap = buildCapability();
+      const registry = new StyleRegistry(ROOT);
+      await registry.load();
+      const styles = registry.listStyles().map((s) => ({
+        id: s.id,
+        name: s.userFacing?.name ?? s.id,
+        grade: s.grade,
+        dimension: s.visuals?.dimension ?? '2d',
+      }));
+      const recipes = registry.listRecipes().map((r) => r.id);
+      const report = {
+        ...cap,
+        styles,
+        recipes,
+        counts: {
+          ...cap.version,
+          styles: styles.length,
+          recipes: recipes.length,
+          templates: cap.grammars.length, // 模板数由 templates/scenes 读盘，摘要不给
+        },
+      };
+      if (opts.json) {
+        out(report);
+        return;
+      }
+      // 摘要给人看：一眼知道「现在有多少东西可以改」
+      out({
+        数量: {
+          动效原语: cap.version.primitives,
+          其中主动作: cap.version.mainActions,
+          其中重音: cap.version.accents,
+          镜头语法: cap.version.grammars,
+          机位词: cap.version.cameraMoves,
+          风格包: styles.length,
+          类型配方: recipes.length,
+        },
+        风格包: styles.map((s) => `${s.id}（${s.name} / ${s.grade} / ${s.dimension}）`),
+        语法: cap.grammars.map((g) => g.id),
+        提示: '加 --json 拿完整名单（原语/机位/语法骨架）',
+      });
+    } catch (e) {
+      fail(e);
+    }
+  });
 
 program
   .command('doctor')
@@ -379,6 +431,8 @@ program
           ? { hint: '已停在确认点：审阅 confirmation 后，编辑 project.json 的 confirmed=true 或用 --yes 重跑 run' }
           : {}),
       });
+      // P8-T0：run 收尾释放常驻 TTS worker（防止 CLI 退出后 worker 变僵尸占 GPU）
+      await engine.destroy();
     } catch (e) {
       fail(e);
     }
@@ -398,13 +452,18 @@ program
       const id = await store.resolveProjectId(opts['project']);
       const project = await store.load(id);
       const tts = createTtsClient(ttsProvider());
-      if (opts['from'] && opts['shot']) {
-        await useRecording(store, project, opts['shot'], opts['from']);
-        out({ shot: opts['shot'], source: 'recording', durationMs: project.shots.find((s) => s.id === opts['shot'])?.voice?.durationMs });
-        return;
+      try {
+        if (opts['from'] && opts['shot']) {
+          await useRecording(store, project, opts['shot'], opts['from']);
+          out({ shot: opts['shot'], source: 'recording', durationMs: project.shots.find((s) => s.id === opts['shot'])?.voice?.durationMs });
+          return;
+        }
+        const n = await resynthesize(store, project, tts, opts['shot'], opts['voice']);
+        out({ synthesized: n });
+      } finally {
+        // P8-T0：voice 收尾释放常驻 TTS worker（失败路径同样释放）
+        await tts.close?.();
       }
-      const n = await resynthesize(store, project, tts, opts['shot'], opts['voice']);
-      out({ synthesized: n });
     } catch (e) {
       fail(e);
     }

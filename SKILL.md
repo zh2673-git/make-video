@@ -93,7 +93,7 @@ cd skills/make-video && npm test && git add -A && git commit -m "fix: ..." && gi
    这是「动效丰富」与「动效廉价」的分界线：丰富来自**每一镜都有明确的主动作**，
    廉价来自**每一镜都砸**。
    - **选语法再选模板**：`pickGrammar()` 按旁白语义打分（这段在讲什么 → 选画法），
-     并**硬排除**冲突项；九种语法见 docs/10 §5.3。不要让模型自由发挥。
+     并**硬排除**冲突项；**11 种语法**见 docs/10 §5.3（真实名单以 `make-video capability` 为准）。不要让模型自由发挥。
    - **重音预算是硬约束**：带 `slam/punch/whip` 的镜头 **≤ 总数 1/3**，超了 compose 直接拦
      （V-MOT-013）。全篇都加粗 = 没有重点。
    - **动作谱八字段**落 `visual.params.actionSheet`：对应口播 / 主体 / 准备 / 主动作 /
@@ -103,38 +103,39 @@ cd skills/make-video && npm test && git add -A && git commit -m "fix: ..." && gi
      "heroAnchor":{"x":76,"y":46,"width":24}}`）即让卡通头像出镜；
      `hero-to-corner` 是**同一元素**开头大窗、随后改尺寸/位置收到角标，
      不是每镜重新淡入（那会在快切里闪）。
-   - 审计落 `logs/motion-audit.json`；12 个动效原语见 `templates/motion/motion-lib.js`。
+   - 审计落 `logs/motion-audit.json`；**26 个动效原语**见 `templates/motion/motion-lib.js`（白名单与实现必须一一对应，由 tests/catalog.test.ts 守护）。
 
 ## 风格菜单（用户叫法 → 风格包）
 
 用户说不出参数，只会说名字和感觉。命中即用；未命中走沉淀（见下）。
 
-| 用户可能说 | style id | 一句话气质 | 适合 | 分级 |
+**下表是唯一可选项**（`styles/` 里真实存在的 style 包，共 9 个，全部 grade A / registered）。
+菜单里没有的风格就是没有——不要照记忆或旧版本文档点名，`getStyle` 会以 `STYLE_UNKNOWN` 拦下。
+
+| 用户可能说 | style id | 一句话气质 | 适合 | 维度 |
 |---|---|---|---|---|
-| 苹果发布会/极简/高级感 | `keynote-minimal` | 纯黑舞台，一屏一事，大字留白 | promo/tutorial | A |
-| Kurzgesagt/科普/扁平插画 | `kurzgesagt-explainer` | 鲜艳矢量，复杂系统可视化 | science-explainer | A |
-| Vox/解释类/图表风 | `vox-explainer` | 干净扁平，排版驱动 | science-explainer | A |
-| 片头风/图形字/Saul Bass | `bass-graphic` | 网格化字体运动，高对比 | news/opinion | A |
-| 韦斯·安德森/对称/童话感 | `anderson-symmetry` | 完美居中，pastel，玩具盒 | story/kids | A |
-| 黑色电影/noir/暗调悬疑 | `noir-contrast` | 低 key 明暗，百叶窗阴影 | story/opinion | A |
-| 赛博朋克/霓虹/科技感 | `cyber-neon` | 霓虹网格，品红×青，辉光 | news/promo | A |
-| 周星驰/无厘头/星爷 | `comedy-pop` | 庄重形式×trivial 内容，破功有真心 | comedy/科普(辅) | A |
-| 新海诚/动漫/氛围感 | `shinkai-atmosphere` | 体积云天空，镜头光晕（照片级背景不可） | story/mood | B |
-| 吉卜力/手绘/温暖 | `ghibli-painterly` | 纸感暖色，田园慢节奏（手绘工艺不可） | story/kids | B |
-| 皮克斯/卡通/儿童向 | `pixar-2d` | 形体语言，圆=友善（3D 不可） | kids | B |
-| 塔可夫斯基/极慢/文艺 | `tarkovsky-pacing` | 仅 pacing 模板，无画面包 | mood | C |
-| 电影感/正统/纪录片式 | `classical-continuity` | 隐形风格，匹配剪辑，暖调人像（v1.5） | story/口播 | A |
-| 口播/大字幕/梗图 | `talking-head-punch` | 关键词大字幕+梗图插入，网感节奏（v1.5） | 口播/科普 | A |
-| 王家卫/文艺/抽帧 | `wongkar-wai` | 抽帧拖影，霓虹夜雨，孤独构图（规划） | story/mood | B |
-| 卡点/MV/混剪 | `mtv-beat` | 节拍剪辑+速度斜坡（规划，依赖 beats） | promo/news | C |
+| 苹果发布会/极简/高级感 | `keynote-minimal` | 纯黑舞台，一屏一事，大字留白 | promo/tutorial | 2d |
+| Kurzgesagt/科普/扁平插画 | `kurzgesagt-explainer` | 鲜艳矢量，复杂系统可视化 | science-explainer | 2d |
+| 片头风/图形字/Saul Bass | `bass-graphic` | 网格化字体运动，高对比 | news/opinion | 2d |
+| 韦斯·安德森/对称/童话感 | `anderson-symmetry` | 完美居中，pastel，玩具盒 | story/kids | 2d |
+| 黑色电影/noir/暗调悬疑 | `noir-contrast` | 低 key 明暗，百叶窗阴影 | story/opinion | 2d |
+| 霓虹科技/赛博/科技产品 | `neon-tech-cinematic` | 深底青光，真实界面×数据流 | promo/news | 2d |
+| 周星驰/无厘头/星爷 | `comedy-pop` | 庄重形式×trivial 内容，破功有真心 | comedy/科普(辅) | css3d |
+| 亮调/纸感/清爽 | `bright-paper` | 高调纸面，柔和投影，留白呼吸 | tutorial/科普 | 2d |
+| 电影感/纪录/暗调质感 | `cinematic-dark` | 低照度纵深，真实素材承担证据 | story/纪录 | mixed |
+
+**规划中（尚无风格包，点名会 `STYLE_UNKNOWN`，只能走沉淀）**：
+Vox 解释类、新海诚氛围、吉卜力手绘、皮克斯卡通、塔可夫斯基极慢、古典连续性剪辑、
+口播大字幕梗图、王家卫抽帧、MV 卡点混剪。这些是方向记录，不是可选项——
+真要用就按「参考风格沉淀」现做包，不要假装菜单里有。
 
 菜单未命中 → 先按六轴找最近 recipe+style（匹配优先），差异大才走沉淀。
 **素材语言速查**：`comedy-pop`=css3d（立体字/转台卡阵只在梗落点）；`cinematic-dark`=mixed
 （纵深合成）；`keynote-minimal`/`kurzgesagt-explainer`/`anderson-symmetry`/`noir-contrast`/
-`bass-graphic`=2d，并禁用立体舞台/纵深模板。用户点名「要 3D/立体/空间感」而所选风格是 2d 时，
+`bass-graphic`/`bright-paper`/`neon-tech-cinematic`=2d，并禁用立体舞台/纵深模板。用户点名「要 3D/立体/空间感」而所选风格是 2d 时，
 先建议换到 css3d/mixed 包或走风格沉淀，不要私自越维。
 **新需求组装公式：成品 = recipe（结构）× style（部门指令）× override（参数覆写）**
-（示例：迪士尼童话 = story-narrative × pixar-2d + 借 ghibli 纸感 override）。
+（示例：迪士尼童话 = story-narrative × 高亮彩插 + 借纸感 override）。
 
 **风格选择纪律**：无默认风格；决策必须带 source + rationale 写 IR；无法论证
 必须问用户。组合三级：recipe 预绑（常规）→ 参数 override（过校验器）→ 自由组合
@@ -238,4 +239,5 @@ docs/03-编剧部.md … 09-工程部.md   七个部门的模块四层+工件+�
 docs/10-视觉与剪辑规范.md      V-* 不变量（公共法律，唯一权威登记处）
 docs/11-风格库与类型配方.md    风格包 schema/沉淀流水线/八类配方/分类轴
 docs/12-架构总览.md           分层/数据流/技术选型/ADR-1~11/CLI/测试
+docs/13-优化落点地图.md        六层落点×三条路径的收益矩阵/判定速查/防腐机制（改哪里有用）
 ```
