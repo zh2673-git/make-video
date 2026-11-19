@@ -14,3 +14,8 @@ projects/
 # 兼容历史目录名
 personal/
 templates/canvas/personal/
+
+# 编译产物与本地临时物（tsc 输出 / 探针脚本 / 临时草稿），不入库
+dist/
+_sync.mjs
+tmp/

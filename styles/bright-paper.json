@@ -105,8 +105,8 @@
     "absorbedAt": "2026-11-04",
     "review": "v1 亮调对拍验收"
   },
-  "references": "references.md",
-  "antiPatterns": "anti-patterns.md",
+  "references": "bright-paper.references.md",
+  "antiPatterns": "bright-paper.anti-patterns.md",
   "visuals": {
     "dimension": "2d",
     "motifs": [
@@ -114,12 +114,24 @@
       "ink-structure",
       "soft-haze"
     ],
-    "sceneBias": ["kinetic-type", "paper-stage", "typography", "comparison", "chart"],
+    "sceneBias": [
+      "kinetic-type",
+      "paper-stage",
+      "typography",
+      "comparison",
+      "chart"
+    ],
     "sceneDeny": [],
     "texture": [
       "paper",
       "soft-haze"
     ],
-    "note": "亮底上一切结构必须靠墨色对比立住；强调色只做点，不做面"
+    "note": "亮底上一切结构必须靠墨色对比立住；强调色只做点，不做面",
+    "emotionMap": {
+      "calm": { "temperature": "neutral", "light": "soft", "pace": "slow", "note": "留白多、低对比变化" },
+      "awe": { "temperature": "cool", "light": "high-key", "pace": "slow", "note": "亮底扩散、结构渐显" },
+      "warm": { "temperature": "warm", "light": "soft", "pace": "medium", "note": "强调色点位暖化" },
+      "tense": { "temperature": "cool", "light": "hard", "pace": "fast", "note": "墨色对比收紧、切点加速" }
+    }
   }
 }
