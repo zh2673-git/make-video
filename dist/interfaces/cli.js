@@ -1,0 +1,1045 @@
+#!/usr/bin/env node
+import { Command } from 'commander';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ProjectStore } from '../infrastructure/project-store.js';
+import { StyleRegistry } from '../domain/style-registry.js';
+import { BuddyCloudBridge } from '../infrastructure/buddy-cloud-bridge.js';
+import { HyperFramesRenderer, renderSpecFor } from '../infrastructure/hyperframes-renderer.js';
+import { createTtsClient } from '../infrastructure/tts-client.js';
+import { createLlmClientFromEnv } from '../infrastructure/llm-client.js';
+import { adoptSceneFile, createEngine, resynthesize, runProject, useRecording, } from '../application/pipeline.js';
+import { buildConfirmation } from '../domain/storyboard.js';
+import { buildCapability } from '../core/catalog.js';
+import { V } from '../core/index.js';
+import { mvError, ERR } from '../core/errors.js';
+import { exists, readJson } from '../infrastructure/fs-utils.js';
+import { exportManifestReport, materializeManifests, backfillAndSave, validateManifests, queryTimeSlice, } from '../application/manifest-app.js';
+import { applyTemplate, loadTemplatePacks } from '../domain/template-pack.js';
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+function out(data) {
+    process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+}
+function info(msg) {
+    process.stderr.write(`${msg}\n`);
+}
+function fail(e) {
+    const err = e;
+    out({ error: err.code ?? 'ERR_UNKNOWN', message: err.message });
+    process.exitCode = 1;
+    return undefined;
+}
+function ttsProvider() {
+    const v = process.env['MV_TTS'] ?? 'auto';
+    if (v === 'edge' || v === 'edge-py' || v === 'silent' || v === 'sovits' || v === 'qwen3' || v === 'auto')
+        return v;
+    return 'auto';
+}
+function makeEngine() {
+    const store = new ProjectStore(ROOT);
+    const registry = new StyleRegistry(ROOT);
+    const engine = createEngine(ROOT, {
+        store,
+        registry,
+        llm: createLlmClientFromEnv(),
+        tts: createTtsClient(ttsProvider()),
+        bridge: new BuddyCloudBridge(),
+        renderer: new HyperFramesRenderer(),
+    });
+    return { engine, registry, store };
+}
+async function loadRegistry(registry) {
+    await registry.load();
+}
+const program = new Command();
+program.name('make-video').description('代码绘制优先的视频编译器').version('1.3.0');
+program
+    .command('capability')
+    .description('能力清单：动效原语/语法/机位/风格包/模板/配方 的实际数量与名单（优化前先看这个）')
+    .option('--json', '输出完整 JSON（默认给摘要）')
+    .action(async (opts) => {
+    try {
+        const cap = buildCapability();
+        const registry = new StyleRegistry(ROOT);
+        await registry.load();
+        const styles = registry.listStyles().map((s) => ({
+            id: s.id,
+            name: s.userFacing?.name ?? s.id,
+            grade: s.grade,
+            dimension: s.visuals?.dimension ?? '2d',
+        }));
+        const recipes = registry.listRecipes().map((r) => r.id);
+        const report = {
+            ...cap,
+            styles,
+            recipes,
+            counts: {
+                ...cap.version,
+                styles: styles.length,
+                recipes: recipes.length,
+                templates: cap.grammars.length, // 模板数由 templates/scenes 读盘，摘要不给
+            },
+        };
+        if (opts.json) {
+            out(report);
+            return;
+        }
+        // 摘要给人看：一眼知道「现在有多少东西可以改」
+        out({
+            数量: {
+                动效原语: cap.version.primitives,
+                其中主动作: cap.version.mainActions,
+                其中重音: cap.version.accents,
+                镜头语法: cap.version.grammars,
+                机位词: cap.version.cameraMoves,
+                风格包: styles.length,
+                类型配方: recipes.length,
+            },
+            风格包: styles.map((s) => `${s.id}（${s.name} / ${s.grade} / ${s.dimension}）`),
+            语法: cap.grammars.map((g) => g.id),
+            提示: '加 --json 拿完整名单（原语/机位/语法骨架）',
+        });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('doctor')
+    .description('环境体检（P 前置）')
+    .action(async () => {
+    try {
+        const renderer = new HyperFramesRenderer();
+        const checks = await renderer.doctor();
+        const bridge = new BuddyCloudBridge();
+        out({
+            checks,
+            buddyCloud: { available: bridge.available },
+            tts: ttsProvider(),
+            llm: process.env['LLM_BASE_URL'] ? 'api' : 'template',
+        });
+        if (checks.some((c) => !c.ok))
+            process.exitCode = 1;
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('init <topic>')
+    .description('创建项目（制片人工件 A1）')
+    .option('--aspect <ratio>', '画幅 16:9|9:16', '16:9')
+    .option('--duration-tier <tier>', '时长档位 short-60|0-5|5-10|10+', '0-5')
+    .option('--genre <id>', '类型配方 id')
+    .option('--style <id>', '指定风格包 id')
+    .option('--script <file>', '直接提供讲稿文件（跳过编剧）')
+    .option('--materials <dir>', '用户素材目录（录音/照片/视频）')
+    .option('--asset-policy <policy>', 'auto|ask|code-first|real-first', 'auto')
+    .action(async (topic, opts) => {
+    try {
+        const { store, registry } = makeEngine();
+        await loadRegistry(registry);
+        const genreOpt = opts['genre'];
+        const genre = genreOpt && registry.hasGenre(genreOpt) ? genreOpt : undefined;
+        const project = await store.initProject({
+            topic,
+            aspect: opts['aspect'] === '9:16' ? '9:16' : '16:9',
+            durationTier: opts['durationTier'] ?? '0-5',
+            ...(genre ? { genre } : {}),
+            // commander 12 把 kebab 选项归一成 camelCase（opts.assetPolicy），
+            // 旧代码读 opts['asset-policy'] 恒为 undefined，导致 --asset-policy 静默失效退回 auto。
+            assetPolicy: (opts['assetPolicy'] ?? opts['asset-policy']) ?? 'auto',
+        });
+        if (opts['materials']) {
+            const { indexMaterials } = await import('../domain/asset-sourcing.js');
+            const fs = await import('node:fs/promises');
+            const files = (await fs.readdir(opts['materials'])).map((f) => path.join(opts['materials'], f));
+            if (files.length)
+                await indexMaterials(store, project, files);
+        }
+        if (opts['script']) {
+            const { readFile } = await import('node:fs/promises');
+            const { ScriptSchema } = await import('../core/schema.js');
+            const { validateScript, validateCharBudget } = await import('../domain/scriptwriter.js');
+            const parsed = JSON.parse(await readFile(opts['script'], 'utf8'));
+            const script = ScriptSchema.parse(parsed);
+            // 注入讲稿同样过编剧部校验（V-SCP-001 + 字数档位）；结构/beat/钩子不再校验
+            const recipe = registry.getRecipe(project.meta.genre);
+            const issues = [...validateScript(script), ...validateCharBudget(script, recipe, project.meta.durationTier)];
+            const errs = issues.filter((i) => i.level === 'error');
+            for (const w of issues.filter((i) => i.level === 'warn'))
+                info(`⚠ ${w.message}`);
+            if (errs.length > 0) {
+                throw new Error(`注入讲稿未过编剧部校验:\n${errs.map((e) => e.message).join('\n')}`);
+            }
+            project.script = script;
+            await store.save(project);
+            info(`讲稿已注入（${script.segments.length} 段，跳过编剧）`);
+        }
+        if (opts['style']) {
+            project.style = {
+                id: opts['style'],
+                source: 'user-specified',
+                rationale: 'init 时用户指定',
+                lineage: {},
+                overrides: {},
+            };
+            await store.save(project);
+        }
+        out({ project: project.meta.id, dir: store.projectDir(project.meta.id) });
+        info(`项目已创建: ${project.meta.id}`);
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('add-material <files...>')
+    .description('用户素材入库（复制进 materials/，自动索引；可选标签/溯源/直接绑定镜头）')
+    .option('--project <id>', '项目 id')
+    .option('--shot <id>', '入库后直接绑定为该镜的真实素材')
+    .option('--tags <list>', '逗号分隔的语义标签（按旁白匹配时命中率更高）')
+    .option('--url <url>', '素材来源页（写入溯源，成片报告可见）')
+    .option('--license <text>', '素材许可证')
+    .option('--credit <text>', '作者署名')
+    .option('--strict', '尺寸不达标即失败（默认只告警）')
+    .action(async (files, opts) => {
+    try {
+        const { store } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        const { indexMaterials, checkMaterial, bindMaterial } = await import('../domain/asset-sourcing.js');
+        const tags = String(opts['tags'] ?? '')
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean);
+        const common = {
+            ...(tags.length ? { tags } : {}),
+            ...(opts['url'] ? { sourceUrl: String(opts['url']) } : {}),
+            ...(opts['license'] ? { license: String(opts['license']) } : {}),
+            ...(opts['credit'] ? { credit: String(opts['credit']) } : {}),
+        };
+        const index = await indexMaterials(store, project, files.map((file) => ({ file, ...common })));
+        const added = index.items.filter((i) => files.some((f) => path.basename(f) === path.basename(i.path)));
+        const issues = added.flatMap((i) => checkMaterial(i));
+        if (opts['strict'] && V.hasError(issues)) {
+            throw mvError('ERR_VALIDATION', `素材不合格:\n${V.formatIssues(issues)}`);
+        }
+        let bound;
+        const shotId = opts['shot'];
+        if (shotId) {
+            const item = added[0];
+            if (!item)
+                throw mvError('ERR_ASSET_MISSING', '没有可绑定的入库结果');
+            bindMaterial(project, shotId, item, '用户手动指定素材');
+            await store.save(project);
+            bound = { shot: shotId, path: item.path };
+        }
+        out({
+            items: added.length,
+            index: added.map((i) => ({
+                path: i.path,
+                type: i.type,
+                ...(i.width ? { width: i.width } : {}),
+                ...(i.height ? { height: i.height } : {}),
+                ...(i.durationMs ? { durationMs: i.durationMs } : {}),
+                tags: i.tags,
+                ...(i.sourceUrl ? { sourceUrl: i.sourceUrl } : {}),
+                ...(i.license ? { license: i.license } : {}),
+            })),
+            issues,
+            ...(bound ? { bound } : {}),
+        });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('stock <query>')
+    .description('真实素材检索（需 MAKEVIDEO_PEXELS_API_KEY，未配置时默认关闭）')
+    .option('--project <id>', '项目 id（下载/绑定时必填）')
+    .option('--count <n>', '返回条数 1-20', '3')
+    .option('--type <type>', 'image|video', 'image')
+    .option('--download', '下载到 materials/ 并入库')
+    .option('--shot <id>', '把首条结果绑定为该镜的真实素材（隐含下载）')
+    .action(async (query, opts) => {
+    try {
+        const { searchStock, downloadStock, stockEnabled, STOCK_HINT } = await import('../infrastructure/stock-media.js');
+        if (!stockEnabled()) {
+            out({ enabled: false, hint: STOCK_HINT });
+            return;
+        }
+        const type = opts['type'] === 'video' ? 'video' : 'image';
+        const count = Number(opts['count'] ?? 3);
+        const result = await searchStock(query, { count, type });
+        const wantDownload = Boolean(opts['download'] || opts['shot']);
+        if (!wantDownload) {
+            out({ enabled: true, provider: result.provider, items: result.items });
+            return;
+        }
+        const { store } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        const dir = store.projectDir(id);
+        const stage = path.join(dir, 'gen', 'stock', String(Date.now()));
+        const staged = [];
+        for (const hit of result.items)
+            staged.push(await downloadStock(hit, stage));
+        const { indexMaterials } = await import('../domain/asset-sourcing.js');
+        const index = await indexMaterials(store, project, staged);
+        const fs = await import('node:fs/promises');
+        await fs.rm(stage, { recursive: true, force: true });
+        const downloaded = index.items
+            .filter((i) => staged.some((f) => path.basename(f) === path.basename(i.path)))
+            .map((i) => i.path);
+        let bound;
+        const shotId = opts['shot'];
+        if (shotId) {
+            const shot = project.shots.find((s) => s.id === shotId);
+            if (!shot)
+                throw new Error(`镜头不存在: ${shotId}`);
+            const file = downloaded[0];
+            if (!file)
+                throw new Error('没有可用的下载结果');
+            const hit = result.items[0];
+            shot.visual = {
+                kind: 'user-material',
+                prompt: query,
+                params: { stock: { provider: hit.provider, id: hit.id, author: hit.author, pageUrl: hit.pageUrl } },
+            };
+            shot.asset = {
+                kind: 'user-material',
+                path: file,
+                meta: { stock: { provider: hit.provider, id: hit.id, author: hit.author, pageUrl: hit.pageUrl } },
+            };
+            shot.state = 'sourced';
+            project.timeline = undefined;
+            await store.save(project);
+            bound = { shot: shotId, path: file };
+        }
+        out({ enabled: true, provider: result.provider, items: result.items, downloaded, ...(bound ? { bound } : {}) });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('storyboard')
+    .description('导演批注 + 分镜 + 确认表（A3/A4/A5）')
+    .option('--project <id>', '项目 id')
+    .option('--style <id>', '指定风格包 id')
+    .action(async (opts) => {
+    try {
+        const { engine, registry, store } = makeEngine();
+        await loadRegistry(registry);
+        const id = await store.resolveProjectId(opts['project']);
+        await engine.init(id);
+        const events = await engine.run({ autoConfirm: false, userStyleId: opts['style'] });
+        const p = engine.getProject();
+        out({
+            stage: p.stage,
+            confirmed: p.confirmed,
+            shots: p.shots.length,
+            style: p.style?.id,
+            events: events.map((e) => e.type),
+            confirmation: buildConfirmation(p),
+        });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('material-plan')
+    .description('素材需求单（逐镜判断哪些镜需要真实素材，写 gen/material-plan.json）')
+    .option('--project <id>', '项目 id')
+    .option('--style <id>', '指定风格包 id（缺省用项目已选风格）')
+    .action(async (opts) => {
+    try {
+        const { store, registry } = makeEngine();
+        await loadRegistry(registry);
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        if (!project.shots.length)
+            throw mvError('ERR_VALIDATION', '缺少分镜，先跑 storyboard');
+        const packId = opts['style'] ?? project.style?.id;
+        if (!packId)
+            throw mvError('ERR_STYLE_UNKNOWN', '项目还没有风格决策，先跑 storyboard 或指定 --style');
+        const pack = !opts['style'] && project.style ? registry.resolveStyle(project.style) : registry.getStyle(packId);
+        const { planMaterials } = await import('../domain/material-plan.js');
+        const briefs = await planMaterials(project, pack, createLlmClientFromEnv());
+        const { atomicWriteJson } = await import('../infrastructure/fs-utils.js');
+        const file = path.join(store.projectDir(id), 'gen', 'material-plan.json');
+        await atomicWriteJson(file, {
+            generatedAt: new Date().toISOString(),
+            topic: project.meta.topic,
+            style: pack.id,
+            briefs,
+        });
+        out({
+            file,
+            total: briefs.length,
+            wanted: briefs.filter((b) => b.need !== 'none').length,
+            briefs,
+        });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('run')
+    .description('全自动推进（默认在确认点暂停；--yes 自动确认）')
+    .option('--project <id>', '项目 id')
+    .option('--style <id>', '指定风格包 id')
+    .option('--template <id>', '整包应用 TemplatePack（题材×风格×元素/动作谱系一次注入）')
+    .option('--yes', '自动确认分镜表（跳过暂停）')
+    .action(async (opts) => {
+    try {
+        const { engine, registry } = makeEngine();
+        await loadRegistry(registry);
+        const id = await engine.deps.store.resolveProjectId(opts['project']);
+        await engine.init(id);
+        if (opts['template']) {
+            const packs = await loadTemplatePacks(ROOT);
+            const pack = packs.get(String(opts['template']));
+            if (!pack) {
+                throw mvError(ERR.SCHEMA, `未知的模板包 ${opts['template']}（可用：${[...packs.keys()].join(', ') || '(无)'}, 用 make-video template list 查看）`);
+            }
+            const project = engine.getProject();
+            const result = applyTemplate(project, pack, {
+                forceStyle: Boolean(opts['style']),
+            });
+            await engine.deps.store.save(project);
+            info(`已应用模板包 ${pack.id}：${result.filled.join('/')}`);
+        }
+        const events = await runProject(engine, {
+            autoConfirm: Boolean(opts['yes']),
+            ...(opts['style'] ? { userStyleId: String(opts['style']) } : {}),
+        });
+        const p = engine.getProject();
+        const last = events[events.length - 1];
+        out({
+            stage: p.stage,
+            events: events.map((e) => e.type),
+            ...(last?.type === 'done' ? { outFile: last.outFile } : {}),
+            ...((p.stage === 'materialize' || p.stage === 'storyboard') && !p.confirmed
+                ? { hint: '已停在确认点：审阅 manifest 预览 + 风格/元素/动作三体后，用 make-video confirm 确认或 --yes 重跑 run' }
+                : {}),
+        });
+        // P8-T0：run 收尾释放常驻 TTS worker（防止 CLI 退出后 worker 变僵尸占 GPU）
+        await engine.destroy();
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('voice')
+    .description('旁白合成/重合成（TTS 或用户录音）')
+    .option('--project <id>', '项目 id')
+    .option('--shot <id>', '只处理某镜')
+    .option('--from <file>', '采用用户录音作为该镜旁白')
+    .option('--voice <name>', 'TTS 声线')
+    .action(async (opts) => {
+    try {
+        const { engine, registry, store } = makeEngine();
+        await loadRegistry(registry);
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        const tts = createTtsClient(ttsProvider());
+        try {
+            if (opts['from'] && opts['shot']) {
+                await useRecording(store, project, opts['shot'], opts['from']);
+                out({ shot: opts['shot'], source: 'recording', durationMs: project.shots.find((s) => s.id === opts['shot'])?.voice?.durationMs });
+                return;
+            }
+            const n = await resynthesize(store, project, tts, opts['shot'], opts['voice']);
+            out({ synthesized: n });
+        }
+        finally {
+            // P8-T0：voice 收尾释放常驻 TTS worker（失败路径同样释放）
+            await tts.close?.();
+        }
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('scene')
+    .description('agent/人工场景接入：校验外部场景 HTML 并落盘（未过校验时返回逐条反馈）')
+    .option('--project <id>', '项目 id')
+    .option('--shot <id>', '目标镜头 id')
+    .option('--from <file>', '外部场景 HTML 文件')
+    .action(async (opts) => {
+    try {
+        const { store, registry } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        await registry.ensureLoaded();
+        const pack = project.style ? registry.resolveStyle(project.style) : undefined;
+        const r = await adoptSceneFile(store, project, opts['shot'] ?? '', opts['from'] ?? '', pack);
+        out({
+            shot: opts['shot'],
+            adopted: r.adopted,
+            ...(!r.adopted ? { feedback: V.formatIssues(r.issues) } : {}),
+        });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('revise <shot>')
+    .description('单镜精修（T1a 精修闭环）：--note 导演批注 / --file 采纳场景 / --coverage 覆盖切 / --rollback 回滚')
+    .option('--project <id>', '项目 id')
+    .option('--note <text>', '导演批注：持久化进 shot.visual.params.revisions，重生成时拼进 payload')
+    .option('--file <file>', '精修后的场景 HTML：过校验后采纳（覆盖写之前自动存版本史）')
+    .option('--coverage <json>', '追加覆盖切点 JSON 数组（剪辑部修订），如 \'[{"at":0.18,"kind":"punch-in"}]\'')
+    .option('--clear-revisions', '清空该镜批注（默认保留累积）')
+    .option('--rollback <version>', '回滚场景到版本史条目（v<N> 或 latest；--file 之前的保险）')
+    .option('--list-versions', '只列版本史不改动')
+    .action(async (shotId, opts) => {
+    try {
+        const { store, registry } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        await registry.ensureLoaded();
+        const pack = project.style ? registry.resolveStyle(project.style) : undefined;
+        const dir = store.projectDir(id);
+        const shot = project.shots.find((s) => s.id === shotId);
+        if (!shot)
+            throw mvError(ERR.PROJECT_NOT_FOUND, `镜头不存在: ${shotId}`);
+        // 只读：列版本史
+        if (opts['listVersions']) {
+            const listFile = path.join(dir, 'scenes', '.history', 'versions.json');
+            const list = exists(listFile)
+                ? await readJson(listFile)
+                : [];
+            out({ shot: shotId, versions: list.filter((e) => e.shot === shotId) });
+            return;
+        }
+        // 回滚（自身也是一次覆盖写，先入史册）
+        if (opts['rollback']) {
+            const { rollbackScene } = await import('../domain/scene-forge.js');
+            const dest = await rollbackScene(dir, shotId, String(opts['rollback']));
+            out({ shot: shotId, rolledBackTo: dest });
+            return;
+        }
+        const revised = { shot: shotId };
+        // 导演批注：累积数组（追加，不覆盖历史——精修史也是决策史）
+        if (opts['note']) {
+            const params = { ...shot.visual.params };
+            const revisions = Array.isArray(params['revisions'])
+                ? params['revisions']
+                : [];
+            revisions.push({ at: new Date().toISOString(), note: String(opts['note']) });
+            params['revisions'] = opts['clearRevisions'] ? [] : revisions;
+            shot.visual.params = params;
+            revised.revisions = params['revisions'];
+        }
+        // 剪辑部修订：追加覆盖切点（schema 校验交给 zod，越界 at/kind 在 store.save 时报）
+        if (opts['coverage']) {
+            let extra = [];
+            try {
+                const parsed = JSON.parse(String(opts['coverage']));
+                if (!Array.isArray(parsed))
+                    throw new Error('coverage 必须是数组');
+                extra = parsed;
+            }
+            catch (e) {
+                throw mvError(ERR.VALIDATION, `--coverage 不是合法 JSON 数组: ${e.message}`);
+            }
+            const coverage = Array.isArray(shot.coverage) ? [...shot.coverage] : [];
+            for (const c of extra) {
+                coverage.push({
+                    at: Math.min(1, Math.max(0, Number(c['at'] ?? 0))),
+                    kind: c['kind'] === 'reframe' ? 'reframe' : 'punch-in',
+                    scale: Number(c['scale'] ?? 1.16),
+                    xPercent: Number(c['xPercent'] ?? 0),
+                    yPercent: Number(c['yPercent'] ?? 0),
+                    rotation: Number(c['rotation'] ?? 0),
+                    motivation: String(c['motivation'] ?? 'emphasis'),
+                });
+            }
+            if (coverage.length > 3)
+                throw mvError(ERR.VALIDATION, `覆盖切最多 3 条（当前 ${coverage.length}）`);
+            shot.coverage = coverage;
+            revised.coverage = coverage;
+        }
+        // 场景采纳：与 scene --from 同一条校验路径（覆盖写自动存版本史）
+        if (opts['file']) {
+            const { adoptScene } = await import('../domain/scene-forge.js');
+            const r = await adoptScene(store, project, shotId, String(opts['file']), pack);
+            if (!r.adopted) {
+                out({ shot: shotId, adopted: false, feedback: V.formatIssues(r.issues) });
+                return;
+            }
+            revised.adopted = true;
+        }
+        if (!opts['note'] && !opts['coverage'] && !opts['file'] && !opts['rollback'] && !opts['clearRevisions']) {
+            out({
+                shot: shotId,
+                hint: '给 --note（批注）/ --file（采纳场景）/ --coverage（覆盖切）/ --rollback <v> / --list-versions 之一',
+                revisions: shot.visual.params['revisions'] ?? [],
+                coverage: shot.coverage,
+            });
+            return;
+        }
+        project.timeline = undefined; // 分镜数据变更 → 时间线必须重算（V-CMP-001）
+        await store.save(project);
+        out({ ok: true, ...revised });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('draw')
+    .description('场景代码生成（美术摄影部）').option('--project <id>', '项目 id')
+    .option('--shot <id>', '只画某镜')
+    .action(async (opts) => {
+    try {
+        const { engine, registry, store } = makeEngine();
+        await loadRegistry(registry);
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        const { ensureAssets } = await import('../domain/asset-sourcing.js');
+        const { BuddyCloudBridge } = await import('../infrastructure/buddy-cloud-bridge.js');
+        const pack = registry.resolveStyle(project.style);
+        const shots = opts['shot'] ? project.shots.filter((s) => s.id === opts['shot']) : project.shots.filter((s) => s.state === 'pending');
+        const bridge = new BuddyCloudBridge();
+        const done = [];
+        for (const shot of shots) {
+            // P12 修复：必须把 LLM 传进去。此前漏传 → draw 走模板 forge，
+            // 全片被 V-SCENE-007（forge 回退 >10%）拦下——`draw` 明明是「画这镜」，
+            // 却因为少一个参数退化成拼字板。state-engine 路径传了，CLI 路径没传。
+            const asset = await ensureAssets(store, project, shot, bridge, pack, engine.deps.llm);
+            shot.asset = asset;
+            shot.state = 'sourced';
+            done.push(shot.id);
+        }
+        await store.save(project);
+        out({ drawn: done });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('import')
+    .description('素材导入（外部视频抽帧/切片 → assets/）')
+    .requiredOption('--shot <id>', '目标镜头')
+    .requiredOption('--from <file>', '导入源（视频文件）')
+    .option('--project <id>', '项目 id')
+    .option('--mode <mode>', 'frame|clip', 'frame')
+    .option('--at <seconds>', '抽帧时间点', '0')
+    .option('--range <range>', '切片范围 起-止（秒），如 3-8')
+    .action(async (opts) => {
+    try {
+        const { store } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        const { importAsset } = await import('../domain/asset-sourcing.js');
+        const range = opts['range']
+            ? opts['range'].split('-').map(Number)
+            : [Number(opts['at'] ?? 0), Number(opts['at'] ?? 0) + 5];
+        const asset = await importAsset(store, project, opts['shot'], opts['from'], opts['mode'] ?? 'frame', range);
+        const shot = project.shots.find((s) => s.id === opts['shot']);
+        if (shot) {
+            shot.visual = { ...shot.visual, kind: 'imported', source: opts['from'] };
+            shot.asset = asset;
+            shot.state = 'sourced';
+        }
+        await store.save(project);
+        out({ shot: opts['shot'], asset: asset.path });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('gaps')
+    .description('镜内空窗探针（V-RHY-012）：ffmpeg silencedetect 扫旁白实测静音段（≥ 阈值即列出）')
+    .option('--project <id>', '项目 id')
+    .option('--min-ms <n>', '静音段最小长度（默认 300ms；1.2s 的真空窗在 TTS 连续朗读下极少）', '300')
+    .option('--shot <id>', '只查某镜')
+    .action(async (opts) => {
+    try {
+        const { store } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        const minMs = Number(opts['minMs'] ?? 300);
+        const { detectGaps } = await import('../domain/audiomix.js');
+        const all = [];
+        for (const shot of project.shots) {
+            if (opts['shot'] && shot.id !== opts['shot'])
+                continue;
+            if (!shot.voice || !exists(shot.voice.file))
+                continue;
+            const gaps = await detectGaps(shot.voice.file, minMs);
+            for (const g of gaps) {
+                all.push({ shot: shot.id, startMs: g.startMs, endMs: g.endMs, durMs: g.endMs - g.startMs });
+            }
+        }
+        out({
+            minMs,
+            total: all.length,
+            gaps: all,
+            hint: all.length
+                ? '检测到旁白静音段（视觉空窗需配合抽帧分析）：长静音处建议 revise --coverage 加覆盖切，或补环境音效'
+                : '旁白连续无长静音。注意：视觉空窗（画面停滞但旁白连续）要用抽帧分析看，静音探针只覆盖声音维度',
+        });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('bench')
+    .description('精修工作台 v1（T3b 立项）：零依赖本地服务，读状态 / revise / 回滚')
+    .option('--project <id>', '项目 id')
+    .option('--port <n>', '监听端口（默认 8788）', '8788')
+    .action(async (opts) => {
+    try {
+        const { startBench } = await import('../interfaces/bench.js');
+        await startBench({
+            project: opts['project'],
+            port: Number(opts['port'] ?? 8788),
+        });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('compose')
+    .description('质量闸门 + 时间线 + HyperFrames 合成项目（剪辑部）')
+    .option('--project <id>', '项目 id')
+    .action(async (opts) => {
+    try {
+        const { engine, registry } = makeEngine();
+        await loadRegistry(registry);
+        const id = await engine.deps.store.resolveProjectId(opts['project']);
+        await engine.init(id);
+        const { compose } = await import('../domain/composer.js');
+        const p = engine.getProject();
+        const pack = registry.resolveStyle(p.style);
+        const recipe = registry.getRecipe(p.meta.genre);
+        const timeline = await compose(engine.deps.store, p, pack, recipe);
+        out({
+            shots: timeline.shots.length,
+            totalMs: timeline.shots.reduce((a, s) => a + s.durationMs, 0),
+            subtitles: timeline.subtitles.length,
+        });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('render')
+    .description('渲染成片（HyperFrames，锁+输出校验）')
+    .option('--project <id>', '项目 id')
+    .option('-o <file>', '输出文件')
+    .action(async (opts) => {
+    try {
+        const { engine, registry } = makeEngine();
+        await loadRegistry(registry);
+        const id = await engine.deps.store.resolveProjectId(opts['project']);
+        await engine.init(id);
+        const p = engine.getProject();
+        if (!p.timeline)
+            throw mvError('ERR_VALIDATION', '尚未装配，请先 compose');
+        const renderer = new HyperFramesRenderer();
+        const checks = await renderer.doctor();
+        const bad = checks.filter((c) => !c.ok);
+        if (bad.length)
+            throw mvError('ERR_RENDER_ENV', `环境不全: ${bad.map((b) => b.name).join(', ')}`);
+        const spec = renderSpecFor(p.meta.aspect);
+        const outFile = opts['o'] ?? path.join(engine.deps.store.projectDir(p.meta.id), 'out', `${p.meta.id}.mp4`);
+        const produced = await renderer.render(engine.deps.store.projectDir(p.meta.id), spec, outFile);
+        const outChecks = await renderer.validateOutput(produced, p.timeline.shots.reduce((a, s) => a + s.durationMs, 0));
+        // 与 engine.run() 的 render 阶段对齐：校验通过就把阶段推到 done、镜头标 ready，
+        // 否则 `status` 永远停在 compose，续跑时会重渲染一遍。
+        const badOut = outChecks.filter((c) => !c.ok);
+        if (badOut.length === 0) {
+            for (const shot of p.shots) {
+                if (shot.state !== 'ready')
+                    shot.state = 'ready';
+            }
+            p.stage = 'done';
+            await engine.deps.store.save(p);
+        }
+        out({ outFile: produced, checks: outChecks });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('status')
+    .description('状态视图（阶段/镜头/缺口/验收门）')
+    .option('--project <id>', '项目 id')
+    .action(async (opts) => {
+    try {
+        const { engine, registry } = makeEngine();
+        await loadRegistry(registry);
+        const id = await engine.deps.store.resolveProjectId(opts['project']);
+        await engine.init(id);
+        out(engine.status());
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('retry')
+    .description('局部重跑（单镜/失败集）')
+    .option('--project <id>', '项目 id')
+    .option('--shot <id>', '指定镜头')
+    .option('--stage <stage>', '回退到指定阶段')
+    .action(async (opts) => {
+    try {
+        const { engine, registry } = makeEngine();
+        await loadRegistry(registry);
+        const id = await engine.deps.store.resolveProjectId(opts['project']);
+        await engine.init(id);
+        const events = await engine.retry(opts['shot'], opts['stage']);
+        out({ events: events.map((e) => e.type), stage: engine.getProject().stage });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('clean')
+    .description('回收中间产物（保留成片与 IR）')
+    .option('--project <id>', '项目 id')
+    .action(async (opts) => {
+    try {
+        const { store } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const result = await store.clean(id);
+        out(result);
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+const templateCmd = program.command('template').description('TemplatePack：风格×配方×元素/动作谱系的跨维度整包（方案 P4）');
+templateCmd
+    .command('list')
+    .description('列出已注册的模板包')
+    .action(async () => {
+    try {
+        const packs = await loadTemplatePacks(ROOT);
+        const list = [...packs.values()].map((p) => ({
+            id: p.id,
+            name: p.name,
+            recipe: p.recipe,
+            style: p.style,
+            elementHints: p.elementHints.length,
+            actionHints: p.actionHints.length,
+            description: p.description,
+        }));
+        out({ count: list.length, templates: list });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+templateCmd
+    .command('apply')
+    .description('对一个已有项目整包应用模板（只填空缺，用户显式选择优先）')
+    .option('--project <id>', '项目 id')
+    .option('--template <id>', '模板包 id')
+    .action(async (opts) => {
+    try {
+        if (!opts['template'])
+            throw mvError(ERR.SCHEMA, 'template apply 需要 --template <id>');
+        const { store } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        const packs = await loadTemplatePacks(ROOT);
+        const pack = packs.get(opts['template']);
+        if (!pack)
+            throw mvError(ERR.SCHEMA, `未知的模板包 ${opts['template']}（用 make-video template list 查看）`);
+        const result = applyTemplate(project, pack);
+        await store.save(project);
+        out({ applied: result.applied, packId: result.packId, filled: result.filled, stage: project.stage });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+const manifestCmd = program.command('manifest').description('元素/动作两清单：反向抽取、导出、备齐、时间切片（方案 P1-P3）');
+manifestCmd
+    .command('export')
+    .description('P1 只读导出：从场景 HTML 反向抽取两清单 → preview/manifest.html + manifest.json（不改流水线）')
+    .option('--project <id>', '项目 id')
+    .option('--frames', '若已有整片，附首/中/末三帧静帧')
+    .action(async (opts) => {
+    try {
+        const { store } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        const r = await exportManifestReport(store, project, { withFrames: Boolean(opts['frames']) });
+        out({ html: r.html, json: r.json, issues: r.issues, shots: project.shots.length });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+manifestCmd
+    .command('materialize')
+    .description('P2 备齐：把两清单写入 project.json（仅填缺省字段，不覆盖人工精修）')
+    .option('--project <id>', '项目 id')
+    .action(async (opts) => {
+    try {
+        const { store } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        const r = await materializeManifests(store, project);
+        out({ filled: r.filled, issues: validateManifests(r.project) });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+manifestCmd
+    .command('backfill')
+    .description('P3 时间回填：由 timeline 的配音时长回填 visibility/timing')
+    .option('--project <id>', '项目 id')
+    .action(async (opts) => {
+    try {
+        const { store } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        const next = await backfillAndSave(store, project);
+        out({ backfilled: next.shots.filter((s) => s.elements || s.actions).length });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+manifestCmd
+    .command('time')
+    .description('P3 时间切片：输入毫秒，反查当刻可见元素 + 在跑动作')
+    .option('--project <id>', '项目 id')
+    .option('--at <ms>', '时间点（毫秒）', '0')
+    .action(async (opts) => {
+    try {
+        const { store } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        out(queryTimeSlice(project, Number(opts['at'])));
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+const styleCmd = program.command('style').description('风格库（菜单/解剖/沉淀/上架）');
+styleCmd
+    .command('list')
+    .description('风格菜单（用户叫法索引）')
+    .option('--grade <grade>', 'A|B|C')
+    .action(async (opts) => {
+    try {
+        const { registry } = makeEngine();
+        await loadRegistry(registry);
+        const packs = registry.listStyles(opts['grade']);
+        out(packs.map((p) => ({
+            id: p.id,
+            name: p.userFacing.name,
+            aliases: p.userFacing.aliases,
+            vibe: p.userFacing.vibe,
+            grade: p.grade,
+            bestFor: p.userFacing.bestFor,
+        })));
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+styleCmd
+    .command('show <id>')
+    .description('解剖卡（anatomy 部门指令集）')
+    .action(async (id) => {
+    try {
+        const { registry } = makeEngine();
+        await loadRegistry(registry);
+        const pack = registry.getStyle(id);
+        out({ id: pack.id, anatomy: pack.anatomy, palette: pack.palette, motion: pack.motion, pacing: pack.pacing });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+styleCmd
+    .command('absorb')
+    .description('新风格沉淀（参考素材/描述 → 草稿包）')
+    .requiredOption('--from <source>', '来源标识（如 用户描述/参考视频名）')
+    .requiredOption('--description <text>', '风格描述')
+    .option('--files <paths...>', '参考文件（抽帧用）')
+    .action(async (opts) => {
+    try {
+        const { registry } = makeEngine();
+        await loadRegistry(registry);
+        const { absorbStyle } = await import('../application/pipeline.js');
+        const result = await absorbStyle(registry, createLlmClientFromEnv(), {
+            source: String(opts['from']),
+            description: String(opts['description']),
+            referenceFiles: opts['files'] ?? [],
+        });
+        out({ ...result, status: 'draft', next: 'style promote <id>（对拍通过后上架）' });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+styleCmd
+    .command('promote <id>')
+    .description('candidate/draft → registered（对拍通过后）')
+    .requiredOption('--review <text>', '对拍结论')
+    .action(async (id, opts) => {
+    try {
+        const { registry } = makeEngine();
+        await loadRegistry(registry);
+        const pack = registry.getStyle(id);
+        const registered = registry.registerPack(pack, { review: opts['review'] });
+        const fs = await import('node:fs/promises');
+        await fs.writeFile(path.join(ROOT, 'styles', `${registered.id}.json`), `${JSON.stringify(registered, null, 2)}\n`, 'utf8');
+        out({ id: registered.id, status: registered.status, grade: registered.grade });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program
+    .command('confirm')
+    .description('确认分镜表（写 confirmed=true，放行采购）')
+    .option('--project <id>', '项目 id')
+    .option('--allow-ai', '授权本项目使用云端 AI 生图（用户显式同意后再加，V-AI-001 闸门）')
+    .action(async (opts) => {
+    try {
+        const { store } = makeEngine();
+        const id = await store.resolveProjectId(opts['project']);
+        const project = await store.load(id);
+        project.confirmed = true;
+        if (opts['allow-ai'])
+            project.meta.aiConsent = true;
+        await store.save(project);
+        out({ confirmed: true, stage: project.stage, aiConsent: project.meta.aiConsent });
+    }
+    catch (e) {
+        fail(e);
+    }
+});
+program.parseAsync(process.argv).catch((e) => {
+    info(`未处理错误: ${e.message}`);
+    process.exit(1);
+});
+void V;

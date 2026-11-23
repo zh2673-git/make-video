@@ -1,0 +1,54 @@
+export const SCHEMA_VERSION = 1;
+export const PROJECTS_DIR = 'projects';
+export const TEMPLATES_DIR = 'templates';
+export const STYLES_DIR = 'styles';
+export const RECIPES_DIR = 'recipes';
+export const ASPECTS = ['16:9', '9:16'];
+export const DURATION_TIERS = ['short-60', '0-5', '5-10', '10+'];
+export const ASPECT_SIZE = {
+    '16:9': { width: 1920, height: 1080 },
+    '9:16': { width: 1080, height: 1920 },
+};
+export const FPS = 30;
+export const CODEC = 'h264';
+export const CONCURRENCY = 3;
+export const LLM_RETRY_MAX = 3;
+// LLM 场景生成带反馈重试次数（校验器意见回传）；耗尽后回退本地模板 forge
+export const SCENE_LLM_RETRIES = 2;
+export const CLOUD_RETRY_MAX = 3;
+export const CLOUD_POLL_INTERVAL_MS = 5000;
+export const CLOUD_POLL_MAX_MS = 600000;
+export const HYPERFRAMES_VERSION = '0.8.173';
+export const BUDDY_CLOUD_SCRIPT_ENV = 'BUDDY_CLOUD_SCRIPT';
+/**
+ * 离线模板占位标记（v1.1.1）。
+ * 离线 template 引擎没有内容能力，产出的只是骨架；带此标记的讲稿由内容门 V-SCP-015 硬拒，
+ * 避免「无 LLM 也当成片交付」——v1.1.0 正是踩了这个坑：8 句套话循环 3.75 遍，形式校验全绿。
+ */
+export const PLACEHOLDER_MARK = '【离线占位】';
+export const AUDIO_SAMPLE_RATE = 24000;
+export const MS_PER_CHAR_CN = 220;
+export const DUCK_RATIO = 0.175;
+export const SYNC_TOLERANCE_MS = 100;
+export const GENRES = [
+    'science-explainer',
+    'story-narrative',
+    'product-promo',
+    'tutorial-howto',
+    'news-brief',
+    'opinion-essay',
+    'documentary-mood',
+    'kids-education',
+    'cosmos-cinematic',
+    'short-vibe',
+];
+export const ANATOMY_KEYS = [
+    'script',
+    'directing',
+    'art',
+    'camera',
+    'performance',
+    'sourcing',
+    'sound',
+    'editing',
+];
